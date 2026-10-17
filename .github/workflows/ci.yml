@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tiregrip
+          POSTGRES_PASSWORD: tiregrip
+          POSTGRES_DB: tiregrip
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tiregrip"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://tiregrip:tiregrip@localhost:5432/tiregrip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # add `cache: pnpm` once pnpm-lock.yaml is committed
+      # No lockfile yet on the first PR; switch to --frozen-lockfile once it's committed.
+      - run: pnpm install
+      - run: pnpm typecheck
+      # Schema straight from src/db/schema.ts + the custom exclusion constraint,
+      # then the constraint test suite against a real Postgres.
+      - run: pnpm db:push
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f drizzle/custom/0001_booking_no_overlap.sql
+      - run: pnpm db:test
+      - run: pnpm db:seed
+      - run: pnpm test --passWithNoTests
+      - run: pnpm build
