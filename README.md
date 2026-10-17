@@ -41,3 +41,15 @@ pnpm dev
 - **Istorija je zaštićena:** usluga ili vozilo sa rezervacijama ne može da se obriše (deaktivira se), cene se čuvaju kao snapshot u rezervaciji.
 
 Sve ovo pokriva `tests/db/constraints.sql`.
+
+## Slobodni termini (korak 2)
+
+`src/lib/availability/` je čista logika bez baze i bez zavisnosti, pokrivena testovima u `tests/availability.test.ts` (`pnpm test`).
+
+- `getDayAvailability` daje sve početne termine za dan, uz oznaku slobodno/zauzeto (zauzeti se prikazuju precrtano) i slobodne dizalice
+- `listBookableDays` daje dane koji imaju bar jedan slobodan termin, za chipove „Danas / Sutra / sub 24.10.“
+- `getOpenStatus` daje stanje za baner „Radimo do 17h“ ili „Otvaramo u pon u 08:00“
+- `findFreeBay` služi za ponovnu proveru pri upisu rezervacije
+- `resolveOffer` daje cenu i trajanje usluge za tip vozila
+
+Pravila: izuzetak za datum zamenjuje nedeljno radno vreme; usluga mora da stane u jedan interval (pauza za ručak); mreža termina kreće od otvaranja na svakih `slot_step_min`; ne nude se termini pre `min_notice_min` ni van `booking_horizon_days`; termin je slobodan ako bar jedna dizalica nema preklapanje, a blokada bez dizalice zauzima sve. Vreme se računa u zoni radnje, ispravno i preko promene letnjeg računanja vremena.
