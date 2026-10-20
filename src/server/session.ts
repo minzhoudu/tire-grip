@@ -48,3 +48,10 @@ export const requireShopAccess = cache(async (slug: string): Promise<ShopAccess>
   if (!row) notFound();
   return { user, shop: row.shop, role: row.role };
 });
+
+/** Like requireShopAccess, but only the owner may proceed (e.g. shop settings). */
+export async function requireOwnerAccess(slug: string): Promise<ShopAccess> {
+  const access = await requireShopAccess(slug);
+  if (access.role !== "owner") notFound();
+  return access;
+}

@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function AdminNav({ slug, pending }: { slug: string; pending: number }) {
+export function AdminNav({ slug, pending, isOwner }: { slug: string; pending: number; isOwner: boolean }) {
   const path = usePathname();
   const base = `/admin/${slug}`;
   const tabs = [
     { href: base, label: "Zahtevi", badge: pending },
     { href: `${base}/novi`, label: "+ Novi termin" },
     { href: `${base}/blokade`, label: "Blokade" },
+    ...(isOwner ? [{ href: `${base}/podesavanja`, label: "Podešavanja" }] : []),
   ];
   return (
     <nav className="flex gap-1 overflow-x-auto px-2" aria-label="Panel">

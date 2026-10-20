@@ -17,7 +17,7 @@ export default async function AdminShopLayout({
 }) {
   await connection();
   const { slug } = await params;
-  const { shop, user } = await requireShopAccess(slug);
+  const { shop, user, role } = await requireShopAccess(slug);
   const pending = await countPending(getDb(), shop);
 
   return (
@@ -40,7 +40,7 @@ export default async function AdminShopLayout({
             <button className="rounded-full px-2 py-1.5 text-xs text-slate-300 hover:text-white">Odjava</button>
           </form>
         </div>
-        <AdminNav slug={shop.slug} pending={pending} />
+        <AdminNav slug={shop.slug} pending={pending} isOwner={role === "owner"} />
       </header>
       <div className="flex-1 px-3 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))]">{children}</div>
     </div>
