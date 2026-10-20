@@ -115,6 +115,22 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
     expect(saved).toHaveLength(2);
   });
 
+  it("under load (10 parallel requests, 5 rounds) never errors: 2 winners, the rest 'taken'", async () => {
+    const db = getDb();
+    for (let round = 0; round < 5; round++) {
+      // its own day, so it doesn't collide with the other tests; one slot per round (08:00 … 10:00)
+      const startsAt = zonedToUtc(addDays(date, 1), 8 * 60 + round * 30, TZ).toISOString();
+      const results = await Promise.all(
+        Array.from({ length: 10 }, (_, i) =>
+          createBookingRequest(db, request({ phone: `064 9${round}0 00${String(i).padStart(2, "0")}`, name: `Talas ${round}-${i}`, startsAt })),
+        ),
+      );
+      const winners = results.filter((r) => r.ok);
+      expect(winners).toHaveLength(2);
+      expect(results.filter((r) => !r.ok).every((r) => !r.ok && r.reason === "slot_unavailable")).toBe(true);
+    }
+  });
+
   it("a longer service (SUV, 60 min) needs both half-hours free", async () => {
     const db = getDb();
     // 13:30 is fully booked → a 60-minute booking at 13:00 can't fit

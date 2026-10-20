@@ -52,6 +52,13 @@ export function pgErrorCode(err: unknown): string | undefined {
 }
 
 const EXCLUSION_VIOLATION = "23P01";
+/**
+ * Two requests inserting overlapping rows at the same instant can deadlock on
+ * an exclusion constraint (each waits for the other's uncommitted row).
+ * Postgres aborts one with 40P01; the savepoint lets us simply try again.
+ */
+const DEADLOCK = "40P01";
+const MAX_DEADLOCK_RETRIES = 5;
 
 export interface CreateBookingOptions {
   now?: Date;
@@ -139,7 +146,9 @@ export async function createBookingRequest(
         }
       }
 
-      for (const bay of slot.freeBays) {
+      let deadlocks = 0;
+      for (let i = 0; i < slot.freeBays.length; i++) {
+        const bay = slot.freeBays[i]!;
         try {
           const [row] = await tx.transaction((sp) =>
             sp
@@ -182,14 +191,19 @@ export async function createBookingRequest(
             serviceName: service.name,
           };
         } catch (err) {
-          if (pgErrorCode(err) === EXCLUSION_VIOLATION) continue; // bay taken a moment ago, try the next one
+          const code = pgErrorCode(err);
+          if (code === EXCLUSION_VIOLATION) continue; // bay taken a moment ago, try the next one
+          if (code === DEADLOCK && deadlocks++ < MAX_DEADLOCK_RETRIES) {
+            i--; // same bay again: the other request has finished by now, so we get a clean answer
+            continue;
+          }
           throw err;
         }
       }
       throw new SlotTaken(); // rolls back the customer/vehicle writes too
     });
   } catch (err) {
-    if (err instanceof SlotTaken || pgErrorCode(err) === EXCLUSION_VIOLATION) {
+    if (err instanceof SlotTaken || pgErrorCode(err) === EXCLUSION_VIOLATION || pgErrorCode(err) === DEADLOCK) {
       return { ok: false, reason: "slot_unavailable" };
     }
     throw err;
