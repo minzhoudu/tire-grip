@@ -1,0 +1,177 @@
+"use server";
+
+/**
+ * Admin server actions. Each one re-checks that the signed-in user belongs to
+ * the shop in `slug` (requireShopAccess) and only ever touches that shop's rows.
+ */
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { getDb } from "@/db";
+import { dayLongLabel, utcToZoned } from "@/lib/availability";
+import { formatMinutes, parseTime } from "@/lib/availability/zoned";
+import { cancellationMessage, confirmationMessage, rejectionMessage } from "@/lib/booking/messages";
+import { bookingRequestSchema, fieldErrors, vehicleTypes, type BookingRequestInput } from "@/lib/booking/request";
+import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "@/lib/booking/status";
+import { whatsappLink } from "@/lib/phone";
+import { adminDaySlots, changeBookingStatus, createBlock, deleteBlock, getBooking, type AdminBooking } from "@/server/admin";
+import { getAuth } from "@/server/auth";
+import { createBookingRequest } from "@/server/bookings";
+import { getOrigin } from "@/server/origin";
+import { requireShopAccess } from "@/server/session";
+import { loadShopContext } from "@/server/shops";
+
+const slugSchema = z.string().min(1).max(80);
+
+async function customerMessageUrl(
+  booking: AdminBooking,
+  shop: { name: string; slug: string; address: string | null; timezone: string },
+  kind: "confirm" | "reject" | "cancel",
+): Promise<string> {
+  const local = utcToZoned(booking.startsAt, shop.timezone);
+  const input = {
+    shopName: shop.name,
+    serviceName: booking.serviceName,
+    dayLabel: dayLongLabel(local.date),
+    time: formatMinutes(local.minutes),
+    priceRsd: booking.priceRsd,
+    address: shop.address,
+    bookingUrl: `${await getOrigin()}/${shop.slug}`,
+  };
+  const text =
+    kind === "confirm" ? confirmationMessage(input) : kind === "reject" ? rejectionMessage(input) : cancellationMessage(input);
+  return whatsappLink(booking.customerPhone, text);
+}
+
+/* ------------------------------------------------------------------ status */
+
+const statusInput = z.object({
+  slug: slugSchema,
+  bookingId: z.uuid(),
+  action: z.enum(["confirm", "reject", "cancel", "complete", "noShow"]),
+});
+
+export type StatusActionResult =
+  | { ok: true; status: BookingStatus; actions: BookingAction[]; messageUrl: string | null }
+  | { ok: false; reason: "not_found" | "not_allowed" | "invalid" };
+
+export async function changeStatusAction(raw: z.input<typeof statusInput>): Promise<StatusActionResult> {
+  const input = statusInput.safeParse(raw);
+  if (!input.success) return { ok: false, reason: "invalid" };
+  const { shop } = await requireShopAccess(input.data.slug);
+
+  const now = new Date();
+  const result = await changeBookingStatus(getDb(), { shopId: shop.id, bookingId: input.data.bookingId, action: input.data.action, now });
+  if (!result.ok) return result;
+
+  const action = input.data.action;
+  const messageUrl = notifiesCustomer(action)
+    ? await customerMessageUrl(result.booking, shop, action as "confirm" | "reject" | "cancel")
+    : null;
+  return {
+    ok: true,
+    status: result.booking.status,
+    actions: allowedActions(result.booking.status, result.booking.startsAt, now),
+    messageUrl,
+  };
+}
+
+/* ------------------------------------------------------------------ manual booking */
+
+const slotsInput = z.object({
+  slug: slugSchema,
+  serviceId: z.uuid(),
+  vehicleType: z.enum(vehicleTypes),
+  date: z.iso.date(),
+});
+
+export async function adminSlotsAction(
+  raw: z.input<typeof slotsInput>,
+): Promise<{ ok: true; status: string; slots: { time: string; startsAt: string; available: boolean }[] } | { ok: false }> {
+  const input = slotsInput.safeParse(raw);
+  if (!input.success) return { ok: false };
+  await requireShopAccess(input.data.slug);
+  const db = getDb();
+  const ctx = await loadShopContext(db, input.data.slug);
+  if (!ctx) return { ok: false };
+  const day = await adminDaySlots(db, ctx, input.data.serviceId, input.data.vehicleType, input.data.date);
+  if (!day) return { ok: false };
+  return {
+    ok: true,
+    status: day.status,
+    slots: day.slots.map((s) => ({ time: s.time, startsAt: s.startsAt.toISOString(), available: s.available })),
+  };
+}
+
+export type ManualBookingResult =
+  | { ok: true; messageUrl: string; summary: string }
+  | { ok: false; reason: "invalid"; errors: Record<string, string> }
+  | { ok: false; reason: "slot_unavailable" | "service_unavailable" | "shop_not_found" };
+
+export async function createManualBookingAction(raw: BookingRequestInput): Promise<ManualBookingResult> {
+  const parsed = bookingRequestSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
+  const { shop } = await requireShopAccess(parsed.data.slug);
+
+  const db = getDb();
+  const result = await createBookingRequest(db, parsed.data, { source: "admin" });
+  if (!result.ok) return { ok: false, reason: result.reason };
+
+  const booking = await getBooking(db, shop.id, result.booking.id);
+  if (!booking) return { ok: false, reason: "slot_unavailable" };
+  return {
+    ok: true,
+    messageUrl: await customerMessageUrl(booking, shop, "confirm"),
+    summary: `${booking.customerName} · ${dayLongLabel(result.booking.date)} u ${result.booking.time}h`,
+  };
+}
+
+/* ------------------------------------------------------------------ blocked time */
+
+const blockInput = z.object({
+  slug: slugSchema,
+  date: z.iso.date(),
+  from: z.string().regex(/^\d{2}:\d{2}$/),
+  to: z.string().regex(/^\d{2}:\d{2}$/),
+  bay: z.number().int().min(1).nullable(),
+  reason: z.string().trim().max(120).optional(),
+});
+
+export type BlockActionResult =
+  | { ok: true; overlappingBookings: number }
+  | { ok: false; error: string };
+
+export async function createBlockAction(raw: z.input<typeof blockInput>): Promise<BlockActionResult> {
+  const input = blockInput.safeParse(raw);
+  if (!input.success) return { ok: false, error: "Proverite datum i vreme." };
+  const { shop } = await requireShopAccess(input.data.slug);
+
+  const result = await createBlock(getDb(), {
+    shopId: shop.id,
+    bays: shop.bays,
+    timezone: shop.timezone,
+    date: input.data.date,
+    fromMin: parseTime(input.data.from),
+    toMin: parseTime(input.data.to),
+    bay: input.data.bay,
+    reason: input.data.reason,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.reason === "invalid_range" ? "Vreme „do“ mora biti posle vremena „od“." : "Nepostojeća dizalica." };
+  }
+  return { ok: true, overlappingBookings: result.overlappingBookings };
+}
+
+export async function deleteBlockAction(raw: { slug: string; blockId: string }): Promise<{ ok: boolean }> {
+  const input = z.object({ slug: slugSchema, blockId: z.uuid() }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireShopAccess(input.data.slug);
+  return { ok: await deleteBlock(getDb(), shop.id, input.data.blockId) };
+}
+
+/* ------------------------------------------------------------------ session */
+
+export async function signOutAction(): Promise<void> {
+  await getAuth().api.signOut({ headers: await headers() });
+  redirect("/prijava");
+}

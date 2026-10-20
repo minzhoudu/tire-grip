@@ -53,7 +53,24 @@ export function pgErrorCode(err: unknown): string | undefined {
 
 const EXCLUSION_VIOLATION = "23P01";
 
-export async function createBookingRequest(db: DB, req: BookingRequest, now = new Date()): Promise<CreateBookingResult> {
+export interface CreateBookingOptions {
+  now?: Date;
+  /**
+   * "web" = customer chat (shop settings apply as-is).
+   * "admin" = entered by the shop (phone call): no minimum notice, a longer
+   * horizon, and the booking is confirmed right away.
+   */
+  source?: "web" | "admin";
+}
+
+/** How far ahead the shop itself can enter bookings. */
+export const ADMIN_HORIZON_DAYS = 120;
+
+export async function createBookingRequest(
+  db: DB,
+  req: BookingRequest,
+  { now = new Date(), source = "web" }: CreateBookingOptions = {},
+): Promise<CreateBookingResult> {
   const ctx = await loadShopContext(db, req.slug);
   if (!ctx) return { ok: false, reason: "shop_not_found" };
 
@@ -65,8 +82,12 @@ export async function createBookingRequest(db: DB, req: BookingRequest, now = ne
   const startsAt = new Date(req.startsAt);
   const { date } = utcToZoned(startsAt, tz);
   const busy = await loadBusy(db, ctx.shop.id, zonedToUtc(date, 0, tz), zonedToUtc(addDays(date, 1), 0, tz));
+  const settings =
+    source === "admin"
+      ? { ...ctx.settings, minNoticeMin: 0, bookingHorizonDays: Math.max(ctx.settings.bookingHorizonDays, ADMIN_HORIZON_DAYS) }
+      : ctx.settings;
   const day = getDayAvailability({
-    shop: ctx.settings,
+    shop: settings,
     weeklyHours: ctx.weeklyHours,
     exceptions: ctx.exceptions,
     busy,
@@ -77,7 +98,7 @@ export async function createBookingRequest(db: DB, req: BookingRequest, now = ne
   const slot = day.slots.find((s) => s.startsAt.getTime() === startsAt.getTime());
   if (!slot || !slot.available) return { ok: false, reason: "slot_unavailable" };
 
-  const status = ctx.shop.autoConfirm ? ("confirmed" as const) : ("pending" as const);
+  const status = source === "admin" || ctx.shop.autoConfirm ? ("confirmed" as const) : ("pending" as const);
 
   try {
     return await db.transaction(async (tx) => {
@@ -135,7 +156,7 @@ export async function createBookingRequest(db: DB, req: BookingRequest, now = ne
                 endsAt: slot.endsAt,
                 bay,
                 status,
-                source: "web",
+                source,
                 customerNote: req.note || null,
                 confirmedAt: status === "confirmed" ? now : null,
               })

@@ -68,3 +68,21 @@ Tok: usluga → vozilo → dan → termin → podaci → potvrda. Ako usluga ima
 - Posle slanja kupac može jednim klikom da prosledi zahtev radnji na WhatsApp (dok ne napravimo admin panel)
 
 Testovi: `tests/booking-flow.test.ts`, `tests/phone-and-messages.test.ts`, `tests/booking-request.test.ts` i integracioni `tests/booking.int.test.ts`, koji radi nad pravom bazom ako je postavljen `DATABASE_URL` (pravi sopstvenu probnu radnju i briše je na kraju).
+
+## Admin panel za vulkanizera (korak 4)
+
+`/admin` (prijava na `/prijava`). Javna registracija je isključena, a nalog pravi:
+
+```bash
+# u .env: BETTER_AUTH_SECRET (openssl rand -base64 32) i BETTER_AUTH_URL=http://localhost:3000
+pnpm admin:create pera@example.rs 'bar-10-karaktera' "Pera" brzi-tocak        # vlasnik
+pnpm admin:create radnik@example.rs 'bar-10-karaktera' "Mika" brzi-tocak staff # radnik
+```
+
+- **Zahtevi** (`/admin/{slug}`): predstojeći termini po danima, osvežavaju se sami na 30 s. Akcije: Potvrdi / Odbij (novi), Završeno / Otkaži / Nije došao (potvrđeni). Posle potvrde, odbijanja ili otkazivanja dobija se dugme „Pošalji na WhatsApp“ sa gotovom porukom kupcu (odbijanje i otkazivanje sadrže link za novi termin). Istorija pokazuje poslednjih 60 dana.
+- **Novi termin** (`/admin/{slug}/novi`): za kupce koji zovu. Isti engine i ista zaštita od preklapanja, ali bez minimalne najave, do 120 dana unapred, odmah potvrđeno.
+- **Blokade** (`/admin/{slug}/blokade`): pauza ili kvar dizalice; kupci tada ne vide te termine. Postojeći termini se ne pomeraju, ali panel upozori koliko ih ima u tom periodu.
+
+Bezbednost: svaka admin stranica i svaka server action proverava da je korisnik član radnje iz URL-a (`requireShopAccess`), a svi upiti su ograničeni na tu radnju. Promena statusa je uslovni `UPDATE … WHERE status IN (…)`, pa dva telefona ne mogu da je primene dvaput. Prijava ide preko Better Auth HTTP endpointa, zbog ugrađenog ograničenja broja pokušaja.
+
+Testovi: `tests/booking-status.test.ts` i `tests/admin.int.test.ts` (prijava, statusi, istorija, ručni unos, blokade, izolacija radnji).

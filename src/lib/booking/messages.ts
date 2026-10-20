@@ -28,5 +28,45 @@ export function newBookingMessage(b: BookingSummary): string {
   ].join("\n");
 }
 
+export interface CustomerMessageInput {
+  shopName: string;
+  serviceName: string;
+  dayLabel: string; // "petak 23.10."
+  time: string; // "08:30"
+  priceRsd: number;
+  address?: string | null;
+  /** Public booking page, for picking another slot */
+  bookingUrl: string;
+}
+
+/** Shop → customer after "Potvrdi". */
+export function confirmationMessage(m: CustomerMessageInput): string {
+  return [
+    `✅ ${m.shopName}: potvrđen termin`,
+    `${m.serviceName}, ${m.dayLabel} u ${m.time}h.`,
+    `Cena: ${formatRsd(m.priceRsd)}.`,
+    ...(m.address ? [`Adresa: ${m.address}`] : []),
+    "Ako ne možete da dođete, javite nam. Vidimo se!",
+  ].join("\n");
+}
+
+/** Shop → customer after "Odbij": the slot can't be done, pick another. */
+export function rejectionMessage(m: CustomerMessageInput): string {
+  return [
+    `${m.shopName}: nažalost, termin ${m.dayLabel} u ${m.time}h ne možemo da primimo.`,
+    `Izaberite drugi termin ovde: ${m.bookingUrl}`,
+    "Izvinite zbog neprijatnosti.",
+  ].join("\n");
+}
+
+/** Shop → customer after "Otkaži" on a confirmed booking. */
+export function cancellationMessage(m: CustomerMessageInput): string {
+  return [
+    `${m.shopName}: moramo da otkažemo vaš termin ${m.dayLabel} u ${m.time}h.`,
+    `Izaberite novi termin ovde: ${m.bookingUrl}`,
+    "Izvinite zbog neprijatnosti.",
+  ].join("\n");
+}
+
 export const vehicleTypeLabels = { car: "Putničko", suv: "SUV / džip", van: "Kombi" } as const;
 export const vehicleTypeIcons = { car: "🚗", suv: "🚙", van: "🚐" } as const;
