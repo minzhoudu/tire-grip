@@ -53,3 +53,18 @@ Sve ovo pokriva `tests/db/constraints.sql`.
 - `resolveOffer` daje cenu i trajanje usluge za tip vozila
 
 Pravila: izuzetak za datum zamenjuje nedeljno radno vreme; usluga mora da stane u jedan interval (pauza za ručak); mreža termina kreće od otvaranja na svakih `slot_step_min`; ne nude se termini pre `min_notice_min` ni van `booking_horizon_days`; termin je slobodan ako bar jedna dizalica nema preklapanje, a blokada bez dizalice zauzima sve. Vreme se računa u zoni radnje, ispravno i preko promene letnjeg računanja vremena.
+
+## Chat za kupca (korak 3)
+
+Javna stranica radnje: `/{slug}` (demo posle `pnpm db:seed`: `http://localhost:3000/brzi-tocak`).
+
+Tok: usluga → vozilo → dan → termin → podaci → potvrda. Ako usluga ima cenu samo za jedan tip vozila, pitanje o vozilu se preskače.
+
+- `src/lib/booking/flow.ts`: state machine kao čist reducer; događaji koji ne pripadaju trenutnom koraku se ignorišu (dupli tap, stara dugmad)
+- `src/app/[slug]/actions.ts`: server actions `getDaysAction`, `getSlotsAction`, `submitBookingAction`; svaki ulaz se validira (Zod)
+- `src/server/bookings.ts`: `createBookingRequest` ponovo proverava termin istim engine-om, pa u jednoj transakciji upisuje klijenta (po telefonu), vozilo i rezervaciju na prvu slobodnu dizalicu. Ako je dizalicu u međuvremenu uzeo drugi zahtev, baza odbija upis (`23P01`) i pokušava se sledeća; ako nijedna nije slobodna, ništa se ne upisuje i kupac bira drugi termin
+- Telefon se čuva u E.164 (`064 123 4567` → `+381641234567`)
+- Saglasnost za podsetnike je checkbox koji je podrazumevano isključen
+- Posle slanja kupac može jednim klikom da prosledi zahtev radnji na WhatsApp (dok ne napravimo admin panel)
+
+Testovi: `tests/booking-flow.test.ts`, `tests/phone-and-messages.test.ts`, `tests/booking-request.test.ts` i integracioni `tests/booking.int.test.ts`, koji radi nad pravom bazom ako je postavljen `DATABASE_URL` (pravi sopstvenu probnu radnju i briše je na kraju).

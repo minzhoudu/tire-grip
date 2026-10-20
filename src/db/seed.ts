@@ -6,12 +6,13 @@
  */
 import "dotenv/config";
 import { eq } from "drizzle-orm";
-import { db } from "./index";
+import { closeDb, getDb } from "./index";
 import { bookings, scheduleExceptions, servicePrices, services, shops, workingHours } from "./schema";
 
 const SLUG = "brzi-tocak";
 
 async function main() {
+  const db = getDb();
   await db.transaction(async (tx) => {
     // Purge order: bookings first (history FKs), then the shop cascades the rest.
     const existing = await tx.query.shops.findFirst({ where: eq(shops.slug, SLUG) });
@@ -76,8 +77,9 @@ async function main() {
 }
 
 main()
-  .then(() => process.exit(0))
-  .catch((err) => {
+  .then(() => closeDb())
+  .catch(async (err) => {
     console.error(err);
+    await closeDb();
     process.exit(1);
   });
