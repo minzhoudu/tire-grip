@@ -36,6 +36,9 @@ const request = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
+// In CI the database is required: a missing DATABASE_URL must fail, not silently skip.
+if (process.env.CI && !process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests in CI");
+
 describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", () => {
   beforeAll(async () => {
     const db = getDb();

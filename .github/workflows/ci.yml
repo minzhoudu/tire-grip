@@ -37,5 +37,13 @@ jobs:
       - run: pnpm db:test
       - run: pnpm db:seed
       # Unit tests + integration tests against the Postgres service above
-      - run: pnpm test
+      - run: pnpm test --reporter=default --reporter=json --outputFile=vitest-results.json
+      - name: Test summary
+        if: always()
+        run: |
+          node -e '
+            const r = require("./vitest-results.json");
+            const msg = `${r.numPassedTests} passed, ${r.numFailedTests} failed, ${r.numPendingTests + r.numTodoTests} skipped (${r.numTotalTests} total)`;
+            console.log(`::notice title=Vitest::${msg}`);
+          '
       - run: pnpm build
