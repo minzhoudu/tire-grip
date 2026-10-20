@@ -76,10 +76,12 @@ describe("safeNextPath", () => {
     [undefined, "/admin"],
     ["/admin/brzi-tocak", "/admin/brzi-tocak"],
     ["/admin/brzi-tocak?view=history", "/admin/brzi-tocak?view=history"],
+    ["/platforma", "/platforma"],
     ["https://evil.example", "/admin"],
     ["//evil.example/admin", "/admin"],
     ["/brzi-tocak", "/admin"],
     ["/admin\\..\\x", "/admin"],
+    ["/platforma\\..\\x", "/admin"],
   ])("%s → %s", (next, expected) => {
     expect(safeNextPath(next)).toBe(expected);
   });

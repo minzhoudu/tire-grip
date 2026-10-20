@@ -80,28 +80,30 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
       {pendingShops.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="px-1 font-mono text-sm font-bold tracking-wide text-slate-500 uppercase">Na čekanju ({pendingShops.length})</h2>
-          {pendingShops.map((s) => (
-            <ShopCard key={s.id} shop={s} pending={pending}>
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => run(() => approveShopAction({ shopId: s.id }), "Odobreno.")}
-                  className="flex-1 rounded-xl border-2 border-navy-900 bg-accent-500 px-4 py-2.5 font-mono font-bold text-navy-950 disabled:opacity-50"
-                >
-                  Odobri
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => run(() => rejectShopAction({ shopId: s.id }), "Odbijeno.")}
-                  className="flex-1 rounded-xl border-2 border-red-300 px-4 py-2.5 font-semibold text-red-700 disabled:opacity-50"
-                >
-                  Odbij
-                </button>
-              </div>
-            </ShopCard>
-          ))}
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4">
+            {pendingShops.map((s) => (
+              <ShopCard key={s.id} shop={s} pending={pending}>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => run(() => approveShopAction({ shopId: s.id }), "Odobreno.")}
+                    className="flex-1 rounded-xl border-2 border-navy-900 bg-accent-500 px-4 py-2.5 font-mono font-bold text-navy-950 disabled:opacity-50"
+                  >
+                    Odobri
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => run(() => rejectShopAction({ shopId: s.id }), "Odbijeno.")}
+                    className="flex-1 rounded-xl border-2 border-red-300 px-4 py-2.5 font-semibold text-red-700 disabled:opacity-50"
+                  >
+                    Odbij
+                  </button>
+                </div>
+              </ShopCard>
+            ))}
+          </div>
         </section>
       )}
 
@@ -110,7 +112,8 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
         {others.length === 0 ? (
           <p className="px-1 text-sm text-slate-500">Još nema odobrenih radnji.</p>
         ) : (
-          others.map((s) => (
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4">
+          {others.map((s) => (
             <ShopCard key={s.id} shop={s} pending={pending}>
               {s.signupStatus === "approved" && (
                 <div className="mt-3 flex items-center justify-between gap-3">
@@ -151,7 +154,8 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
                 </button>
               )}
             </ShopCard>
-          ))
+          ))}
+          </div>
         )}
       </section>
     </div>

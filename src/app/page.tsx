@@ -15,33 +15,45 @@ const STEPS = [
 export default function LandingPage() {
   return (
     <div className="min-h-dvh bg-slate-100">
-      <header className="bg-navy-900 px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-10 text-white">
-        <div className="mx-auto flex max-w-md items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-xl bg-accent-500 text-xl" aria-hidden>
-            🛞
+      <header className="bg-navy-900 px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-10 text-white md:px-10 md:pt-10 md:pb-16">
+        <div className="mx-auto max-w-md md:max-w-5xl">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-xl bg-accent-500 text-xl" aria-hidden>
+              🛞
+            </div>
+            <p className="font-mono text-lg font-bold">Tire Grip</p>
           </div>
-          <p className="font-mono text-lg font-bold">Tire Grip</p>
-        </div>
-        <div className="mx-auto mt-8 max-w-md">
-          <h1 className="font-mono text-3xl leading-tight font-bold">Zakazivanje za vulkanizere, bez telefona koji stalno zvoni.</h1>
-          <p className="mt-3 text-slate-300">
-            Kupci sami zakažu termin kroz kratak chat na svom telefonu. Vi vidite zahteve u jednom panelu i potvrđujete jednim dodirom.
-          </p>
-          <Link
-            href="/registracija"
-            className="mt-6 inline-block rounded-xl border-2 border-white bg-accent-500 px-6 py-3.5 font-mono font-bold text-navy-950 active:scale-[0.98]"
-          >
-            Registrujte svoju radnju →
-          </Link>
+          <div className="mt-8 md:flex md:items-end md:justify-between md:gap-10">
+            <div className="md:max-w-xl">
+              <h1 className="font-mono text-3xl leading-tight font-bold md:text-5xl">
+                Zakazivanje za vulkanizere, bez telefona koji stalno zvoni.
+              </h1>
+              <p className="mt-3 text-slate-300 md:mt-5 md:text-lg">
+                Kupci sami zakažu termin kroz kratak chat na svom telefonu. Vi vidite zahteve u jednom panelu i potvrđujete jednim dodirom.
+              </p>
+              <Link
+                href="/registracija"
+                className="mt-6 inline-block rounded-xl border-2 border-white bg-accent-500 px-6 py-3.5 font-mono font-bold text-navy-950 active:scale-[0.98] md:mt-8 md:px-8 md:py-4 md:text-lg"
+              >
+                Registrujte svoju radnju →
+              </Link>
+            </div>
+            <div className="mt-10 hidden shrink-0 rounded-2xl border-2 border-white/20 bg-white/5 p-6 font-mono text-sm text-slate-300 md:block">
+              <p className="text-accent-400">$ kupac otvara link</p>
+              <p className="mt-1">→ bira uslugu i termin</p>
+              <p className="mt-1">→ vi potvrđujete</p>
+              <p className="mt-1 text-accent-400">✓ gotovo, bez zvanja</p>
+            </div>
+          </div>
         </div>
       </header>
       <div className="hazard-stripe" />
 
-      <main className="mx-auto max-w-md px-5 py-10">
+      <main className="mx-auto max-w-md px-5 py-10 md:max-w-5xl md:px-10 md:py-16">
         <h2 className="font-mono text-sm font-bold tracking-wide text-slate-500 uppercase">Kako radi</h2>
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-3 md:grid md:grid-cols-3 md:gap-5">
           {STEPS.map((s, i) => (
-            <div key={s.title} className="flex gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
+            <div key={s.title} className="flex gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4 md:flex-col md:gap-2 md:p-5">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-navy-900 font-mono text-sm font-bold text-accent-500">
                 {i + 1}
               </div>
@@ -55,8 +67,8 @@ export default function LandingPage() {
           ))}
         </div>
 
-        <div className="mt-8 rounded-2xl border-2 border-navy-900 bg-white p-5 text-center">
-          <p className="font-mono text-lg font-bold">Besplatan probni period</p>
+        <div className="mt-8 rounded-2xl border-2 border-navy-900 bg-white p-5 text-center md:mx-auto md:mt-12 md:max-w-xl md:p-8">
+          <p className="font-mono text-lg font-bold md:text-xl">Besplatan probni period</p>
           <p className="mt-1 text-sm text-slate-600">Bez kartice. Registrujte radnju, mi je ručno odobrimo i javimo vam se za dalje.</p>
           <Link
             href="/registracija"
@@ -72,14 +84,6 @@ export default function LandingPage() {
             Prijavite se
           </Link>
         </p>
-
-        {process.env.NODE_ENV !== "production" && (
-          <p className="mt-10 text-center">
-            <Link href="/brzi-tocak" className="font-semibold text-navy-700 underline">
-              Demo radnja: Brzi Točak →
-            </Link>
-          </p>
-        )}
       </main>
     </div>
   );

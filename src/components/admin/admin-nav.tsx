@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getAdminNavItems } from "./admin-nav-items";
 
 export function AdminNav({ slug, pending, isOwner }: { slug: string; pending: number; isOwner: boolean }) {
   const path = usePathname();
   const base = `/admin/${slug}`;
-  const tabs = [
-    { href: base, label: "Zahtevi", badge: pending },
-    { href: `${base}/novi`, label: "+ Novi termin" },
-    { href: `${base}/blokade`, label: "Blokade" },
-    ...(isOwner ? [{ href: `${base}/podesavanja`, label: "Podešavanja" }] : []),
-  ];
+  const tabs = getAdminNavItems(slug, pending, isOwner);
   return (
-    <nav className="flex gap-1 overflow-x-auto px-2" aria-label="Panel">
+    <nav className="flex gap-1 overflow-x-auto px-2 md:hidden" aria-label="Panel">
       {tabs.map((t) => {
         const active = t.href === base ? path === base : path.startsWith(t.href);
         return (

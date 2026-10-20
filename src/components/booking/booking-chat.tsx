@@ -78,10 +78,29 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
   const retry = () => setReloadKey((k) => k + 1);
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-slate-100">
-      <Header shop={shop} />
+    <div className="min-h-dvh bg-slate-100 md:flex md:items-start md:justify-center md:gap-10 md:bg-navy-900 md:px-10 md:py-12">
+      <aside className="hidden shrink-0 md:block md:w-72 md:pt-6 md:text-white">
+        <p className="font-mono text-3xl font-bold">{shop.name}</p>
+        <p className="mt-1 text-slate-300">Vulkanizer{shop.city ? ` · ${shop.city}` : ""}</p>
+        <p className="mt-5 flex items-center gap-1.5 text-sm font-medium">
+          <span className={`size-2.5 rounded-full ${shop.open ? "bg-emerald-500" : "bg-slate-400"}`} aria-hidden />
+          {shop.statusText}
+        </p>
+        {shop.address && <p className="mt-2 text-sm text-slate-400">📍 {shop.address}</p>}
+        {shop.phone && (
+          <a href={`tel:${shop.phone}`} className="mt-5 inline-block rounded-full border-2 border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold">
+            📞 Pozovi
+          </a>
+        )}
+      </aside>
 
-      <main className="flex flex-1 flex-col gap-3 px-3 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]" aria-live="polite">
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-slate-100 md:h-[min(860px,85vh)] md:min-h-0 md:overflow-hidden md:rounded-3xl md:border-2 md:border-navy-900 md:shadow-2xl">
+        <Header shop={shop} />
+
+        <main
+          className="flex flex-1 flex-col gap-3 px-3 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:overflow-y-auto"
+          aria-live="polite"
+        >
         <Bot>
           <p>
             👋 Dobrodošli u <strong>{shop.name}</strong>!
@@ -251,6 +270,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
         )}
         <div ref={endRef} />
       </main>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { getDb } from "@/db";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { ToastProvider } from "@/components/ui/toast";
 import { countPending } from "@/server/admin";
 import { requireShopAccess } from "@/server/session";
@@ -23,37 +24,65 @@ export default async function AdminShopLayout({
 
   return (
     <ToastProvider>
-      <div className="mx-auto flex min-h-dvh max-w-2xl flex-col bg-slate-100">
-        {isImpersonating && (
-          <div className="flex items-center justify-between gap-3 bg-accent-500 px-4 py-2 text-sm font-semibold text-navy-950">
-            <span>🛠️ Podrška: ulogovani ste kao {shop.name}, u ime vlasnika</span>
-            <form action={endImpersonationAction}>
-              <button className="shrink-0 rounded-full border-2 border-navy-900 bg-white px-3 py-1 text-xs font-bold">Završi pristup</button>
-            </form>
+      <div className="flex min-h-dvh bg-slate-100 md:items-stretch">
+        {/* Desktop sidebar — mobile keeps the sticky top header + tabs below instead. */}
+        <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:bg-navy-900 md:text-white">
+          <div className="p-5">
+            <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
+            <p className="truncate text-xs text-slate-300">{user.name}</p>
           </div>
-        )}
-        <header className="sticky top-0 z-20 bg-navy-900 text-white shadow-md">
-          <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
-              <p className="truncate text-xs text-slate-300">{user.name}</p>
-            </div>
+          <div className="flex-1 px-3">
+            <AdminSidebar slug={shop.slug} pending={pending} isOwner={role === "owner"} />
+          </div>
+          <div className="flex flex-col gap-2 p-4">
             <a
               href={`/${shop.slug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold whitespace-nowrap"
+              className="rounded-full bg-white/10 px-3 py-2 text-center text-xs font-semibold"
             >
               Stranica za kupce ↗
             </a>
             <form action={signOutAction}>
-              <button className="rounded-full px-2 py-1.5 text-xs text-slate-300 hover:text-white">Odjava</button>
+              <button className="w-full rounded-full px-3 py-2 text-center text-xs text-slate-300 hover:text-white">Odjava</button>
             </form>
           </div>
-          <AdminNav slug={shop.slug} pending={pending} isOwner={role === "owner"} />
-          <div className="hazard-stripe" />
-        </header>
-        <div className="flex-1 px-3 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))]">{children}</div>
+        </aside>
+
+        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col md:mx-0 md:max-w-none">
+          {isImpersonating && (
+            <div className="flex items-center justify-between gap-3 bg-accent-500 px-4 py-2 text-sm font-semibold text-navy-950">
+              <span>🛠️ Podrška: ulogovani ste kao {shop.name}, u ime vlasnika</span>
+              <form action={endImpersonationAction}>
+                <button className="shrink-0 rounded-full border-2 border-navy-900 bg-white px-3 py-1 text-xs font-bold">Završi pristup</button>
+              </form>
+            </div>
+          )}
+          <header className="sticky top-0 z-20 bg-navy-900 text-white shadow-md md:hidden">
+            <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
+                <p className="truncate text-xs text-slate-300">{user.name}</p>
+              </div>
+              <a
+                href={`/${shop.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold whitespace-nowrap"
+              >
+                Stranica za kupce ↗
+              </a>
+              <form action={signOutAction}>
+                <button className="rounded-full px-2 py-1.5 text-xs text-slate-300 hover:text-white">Odjava</button>
+              </form>
+            </div>
+            <AdminNav slug={shop.slug} pending={pending} isOwner={role === "owner"} />
+            <div className="hazard-stripe" />
+          </header>
+          <div className="flex-1 px-3 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))] md:px-10 md:pt-10">
+            <div className="md:mx-auto md:max-w-3xl">{children}</div>
+          </div>
+        </div>
       </div>
     </ToastProvider>
   );
