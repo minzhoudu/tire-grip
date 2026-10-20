@@ -151,7 +151,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
             {flow.vehicleType && price && (
               <Bot>
                 <p>
-                  Cena: <strong>{formatRsd(price.priceRsd)}</strong>, oko {price.durationMin ?? service.durationMin} minuta.
+                  Cena: <strong className="font-mono text-rust-600">{formatRsd(price.priceRsd)}</strong>, oko {price.durationMin ?? service.durationMin} minuta.
                 </p>
                 <p>Kada dolazite?</p>
                 {flow.step === "day" && (
@@ -185,7 +185,11 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
               </>
             )}
 
-            {flow.slot && <User>{flow.slot.time}</User>}
+            {flow.slot && (
+              <User>
+                <span className="font-mono">{flow.slot.time}</span>
+              </User>
+            )}
 
             {flow.step === "details" && flow.slot && offerKey && (
               <DetailsForm
@@ -227,9 +231,9 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
                       href={confirmation.shopWhatsappUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded-full bg-[#25d366] px-4 py-2.5 text-[15px] font-semibold text-white shadow-sm active:scale-[0.98]"
+                      className="rounded-full border-2 border-navy-900 bg-[#25d366] px-4 py-2.5 font-mono text-[15px] font-semibold text-white active:scale-[0.98]"
                     >
-                      📲 Javi radnji na WhatsApp
+                      📲 JAVI RADNJI NA WHATSAPP
                     </a>
                   )}
                   <Chip
@@ -268,7 +272,7 @@ function Header({ shop }: { shop: ChatShop }) {
           🛞
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg leading-tight font-bold">{shop.name}</h1>
+          <h1 className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</h1>
           <p className="truncate text-sm text-slate-300">Vulkanizer{shop.city ? ` · ${shop.city}` : ""}</p>
         </div>
         {shop.phone && (
@@ -292,6 +296,7 @@ function Header({ shop }: { shop: ChatShop }) {
           </a>
         )}
       </div>
+      <div className="hazard-stripe" />
     </header>
   );
 }
@@ -302,7 +307,7 @@ function Bot({ children }: { children: React.ReactNode }) {
       <div className="grid size-8 shrink-0 place-items-center rounded-full bg-navy-900 text-sm" aria-hidden>
         🛞
       </div>
-      <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-[15px] leading-relaxed text-slate-800 shadow-sm">
+      <div className="max-w-[85%] rounded-2xl rounded-bl-md border-2 border-navy-900 bg-white px-4 py-3 text-[15px] leading-relaxed text-slate-800">
         {children}
       </div>
     </div>
@@ -312,7 +317,7 @@ function Bot({ children }: { children: React.ReactNode }) {
 function User({ children }: { children: React.ReactNode }) {
   return (
     <div className="bubble-in flex justify-end">
-      <div className="max-w-[80%] rounded-2xl rounded-br-md bg-navy-900 px-4 py-2.5 text-[15px] font-medium text-white shadow-sm">
+      <div className="max-w-[80%] rounded-2xl rounded-br-md bg-navy-900 px-4 py-2.5 text-[15px] font-medium text-white">
         {children}
       </div>
     </div>
@@ -476,7 +481,7 @@ function SlotPicker({
             disabled={!s.available}
             onClick={() => onPick(s)}
             aria-label={s.available ? `Termin ${s.time}` : `${s.time}, zauzeto`}
-            className={`rounded-full border py-2.5 text-[15px] font-semibold tabular-nums transition active:scale-[0.97] ${
+            className={`rounded-full border py-2.5 font-mono text-[15px] font-semibold tabular-nums transition active:scale-[0.97] ${
               s.available
                 ? "border-slate-200 bg-slate-100 text-slate-800 hover:border-navy-700 hover:bg-white"
                 : "cursor-not-allowed border-transparent bg-slate-50 text-slate-300 line-through"
@@ -517,7 +522,7 @@ function PriceList({ services }: { services: PublicService[] }) {
               {used.map((t) => {
                 const p = s.prices.find((x) => x.vehicleType === t);
                 return (
-                  <td key={t} className="py-1.5 pl-2 text-right whitespace-nowrap tabular-nums">
+                  <td key={t} className="py-1.5 pl-2 text-right font-mono font-bold whitespace-nowrap tabular-nums text-rust-600">
                     {p ? formatRsd(p.priceRsd) : "–"}
                   </td>
                 );
@@ -575,17 +580,17 @@ function DetailsForm({
   };
 
   return (
-    <form onSubmit={submit} className="bubble-in rounded-2xl bg-white p-4 shadow-sm" noValidate>
-      <h2 className="text-lg font-bold">📝 Još samo vaši podaci</h2>
+    <form onSubmit={submit} className="bubble-in rounded-2xl border-2 border-navy-900 bg-white p-4" noValidate>
+      <h2 className="font-mono text-lg font-bold">📝 Još samo vaši podaci</h2>
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-xl bg-slate-50 px-3 py-2.5 text-sm">
         <dt className="text-slate-500">Usluga</dt>
         <dd className="font-medium">{summary.service}</dd>
         <dt className="text-slate-500">Vozilo</dt>
         <dd className="font-medium">{summary.vehicle}</dd>
         <dt className="text-slate-500">Termin</dt>
-        <dd className="font-medium">{summary.when}</dd>
+        <dd className="font-mono font-medium">{summary.when}</dd>
         <dt className="text-slate-500">Cena</dt>
-        <dd className="font-medium">{summary.price}</dd>
+        <dd className="font-mono font-bold text-rust-600">{summary.price}</dd>
       </dl>
 
       <Field label="Ime" required error={errors.name}>
@@ -649,7 +654,7 @@ function DetailsForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-xl bg-accent-500 px-4 py-3.5 text-[17px] font-bold text-navy-950 shadow-sm active:scale-[0.98] disabled:opacity-60"
+          className="rounded-xl border-2 border-navy-900 bg-accent-500 px-4 py-3.5 font-mono text-[17px] font-bold text-navy-950 active:scale-[0.98] disabled:opacity-60"
         >
           {pending ? "Šaljem…" : "📅 Pošalji zahtev"}
         </button>

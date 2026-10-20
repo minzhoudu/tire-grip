@@ -214,7 +214,7 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
       <ul className="flex flex-col gap-2">
         {services.map((s, idx) =>
           editingId === s.id ? (
-            <li key={s.id} className="rounded-2xl bg-white p-2 shadow-sm">
+            <li key={s.id} className="rounded-2xl border-2 border-navy-900 bg-white p-2">
               <ServiceForm
                 slug={slug}
                 initial={formFromService(s)}
@@ -241,7 +241,7 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
               />
             </li>
           ) : (
-            <li key={s.id} className={`rounded-2xl bg-white p-4 shadow-sm ${!s.isActive ? "opacity-60" : ""}`}>
+            <li key={s.id} className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${!s.isActive ? "opacity-60" : ""}`}>
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">

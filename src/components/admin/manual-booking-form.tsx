@@ -55,21 +55,21 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
   }, [slug, serviceId, vehicleType, date, reload]);
 
   if (services.length === 0) {
-    return <p className="rounded-2xl bg-white p-5 shadow-sm">Radnja nema nijednu uslugu koja se zakazuje.</p>;
+    return <p className="rounded-2xl border-2 border-navy-900 bg-white p-5">Radnja nema nijednu uslugu koja se zakazuje.</p>;
   }
 
   if (done) {
     return (
-      <div className="rounded-2xl bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border-2 border-navy-900 bg-white p-5">
         <p className="text-lg font-bold">✅ Termin je upisan</p>
         <p className="mt-1 text-slate-700">{done.summary}</p>
         <a
           href={done.messageUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 block rounded-xl bg-[#25d366] px-4 py-3 text-center font-bold text-white"
+          className="mt-4 block rounded-xl border-2 border-navy-900 bg-[#25d366] px-4 py-3 text-center font-mono font-bold text-white"
         >
-          📲 Pošalji potvrdu kupcu na WhatsApp
+          📲 POŠALJI POTVRDU KUPCU NA WHATSAPP
         </a>
         <div className="mt-3 flex gap-2">
           <button
@@ -114,7 +114,7 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-sm" noValidate>
+    <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl border-2 border-navy-900 bg-white p-4" noValidate>
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Usluga</span>
         <select className={`${input} mt-1.5`} value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
@@ -173,7 +173,7 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
                   setStartsAt(s.startsAt);
                   setErrors((e) => ({ ...e, startsAt: "" }));
                 }}
-                className={`rounded-full border py-2.5 text-[15px] font-semibold tabular-nums ${
+                className={`rounded-full border py-2.5 font-mono text-[15px] font-semibold tabular-nums ${
                   startsAt === s.startsAt
                     ? "border-navy-900 bg-navy-900 text-white"
                     : s.available
@@ -219,7 +219,7 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
       <button
         type="submit"
         disabled={pending}
-        className="rounded-xl bg-accent-500 px-4 py-3.5 text-[17px] font-bold text-navy-950 active:scale-[0.98] disabled:opacity-60"
+        className="rounded-xl border-2 border-navy-900 bg-accent-500 px-4 py-3.5 font-mono text-[17px] font-bold text-navy-950 active:scale-[0.98] disabled:opacity-60"
       >
         {pending ? "Upisujem…" : "Upiši termin"}
       </button>

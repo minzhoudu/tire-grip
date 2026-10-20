@@ -13,7 +13,7 @@ export default async function BlocksPage({ params }: { params: Promise<{ slug: s
   return (
     <div className="flex flex-col gap-4">
       <div className="px-1">
-        <h1 className="text-xl font-bold">Blokirano vreme</h1>
+        <h1 className="font-mono text-xl font-bold">Blokirano vreme</h1>
         <p className="text-sm text-slate-600">Pauza, kvar dizalice, kupci bez zakazivanja: kupci tada ne vide slobodne termine.</p>
       </div>
       <BlockForm slug={slug} bays={shop.bays} today={shopToday(shop, new Date())} />

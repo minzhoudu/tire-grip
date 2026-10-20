@@ -70,7 +70,7 @@ export function WorkingHoursEditor({ slug, weeklyHours }: { slug: string; weekly
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm">
+    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
       {days.map((d) => {
         const open = d.intervals.length > 0;
         return (

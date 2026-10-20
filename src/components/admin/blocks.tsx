@@ -63,7 +63,7 @@ export function BlockForm({ slug, bays, today }: { slug: string; bays: number; t
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm">
+    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Datum</span>
         <input type="date" min={today} required className={`${input} mt-1.5`} value={date} onChange={(e) => setDate(e.target.value)} />
@@ -94,7 +94,7 @@ export function BlockForm({ slug, bays, today }: { slug: string; bays: number; t
       <button
         type="submit"
         disabled={pending}
-        className="rounded-xl bg-navy-900 px-4 py-3.5 font-bold text-white active:scale-[0.98] disabled:opacity-60"
+        className="rounded-xl border-2 border-navy-900 bg-navy-900 px-4 py-3.5 font-mono font-bold text-white active:scale-[0.98] disabled:opacity-60"
       >
         {pending ? "Čuvam…" : "Blokiraj vreme"}
       </button>
@@ -118,9 +118,9 @@ export function BlockList({
   return (
     <ul className="flex flex-col gap-2">
       {blocks.map((b) => (
-        <li key={b.id} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm">
+        <li key={b.id} className="flex items-center gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
           <div className="min-w-0 flex-1">
-            <p className="font-semibold">{b.when}</p>
+            <p className="font-mono font-bold">{b.when}</p>
             <p className="truncate text-sm text-slate-600">{[b.bay, b.reason].filter(Boolean).join(" · ") || "Bez razloga"}</p>
           </div>
           <button

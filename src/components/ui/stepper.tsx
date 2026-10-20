@@ -20,7 +20,7 @@ export function Stepper({
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-1.5 py-1.5">
+    <div className="flex items-center justify-between gap-2 rounded-xl border-2 border-navy-900 bg-white px-1.5 py-1.5">
       <button
         type="button"
         aria-label={label ? `Smanji ${label}` : "Smanji"}
@@ -30,7 +30,7 @@ export function Stepper({
       >
         −
       </button>
-      <span className="min-w-0 flex-1 text-center text-base font-bold tabular-nums text-slate-900">
+      <span className="min-w-0 flex-1 text-center font-mono text-base font-bold tabular-nums text-slate-900">
         {value}
         {suffix ? <span className="ml-1 text-xs font-semibold text-slate-400">{suffix}</span> : null}
       </span>

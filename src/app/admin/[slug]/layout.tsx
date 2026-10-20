@@ -27,7 +27,7 @@ export default async function AdminShopLayout({
         <header className="sticky top-0 z-20 bg-navy-900 text-white shadow-md">
           <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-lg leading-tight font-bold">{shop.name}</p>
+              <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
               <p className="truncate text-xs text-slate-300">{user.name}</p>
             </div>
             <a
@@ -43,6 +43,7 @@ export default async function AdminShopLayout({
             </form>
           </div>
           <AdminNav slug={shop.slug} pending={pending} isOwner={role === "owner"} />
+          <div className="hazard-stripe" />
         </header>
         <div className="flex-1 px-3 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>

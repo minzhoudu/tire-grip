@@ -1,11 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-navy-950: #0a1a2e;
-  --color-navy-900: #0f2540;
-  --color-navy-700: #24456b;
-  --color-accent-400: #ffc933;
-  --color-accent-500: #f5b301;
+  /* Workshop ink — asphalt black, used for chrome, borders and primary text-on-accent */
+  --color-navy-950: #0d0d0d;
+  --color-navy-900: #141414;
+  --color-navy-700: #3a3a3a;
+  /* Safety yellow — the one loud accent, reserved for primary actions and selected states */
+  --color-accent-400: #ffd966;
+  --color-accent-500: #ffc83d;
+  /* Price/number emphasis */
+  --color-rust-600: #c1501f;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-courier-prime), "Courier New", monospace;
 }
 
 :root {
@@ -14,6 +21,12 @@
 
 body {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Diagonal safety-stripe accent under a header — the workshop signature. */
+.hazard-stripe {
+  height: 8px;
+  background: repeating-linear-gradient(135deg, var(--color-accent-500) 0 14px, var(--color-navy-900) 14px 28px);
 }
 
 @keyframes bubble-in {

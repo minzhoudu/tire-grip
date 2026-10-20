@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: Props) {
           🛞
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Prijava</h1>
+          <h1 className="font-mono text-2xl font-bold">Prijava</h1>
           <p className="text-sm text-slate-600">Panel za vulkanizere</p>
         </div>
       </div>

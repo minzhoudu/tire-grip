@@ -36,7 +36,7 @@ export function BookingRulesForm({ slug, rules }: { slug: string; rules: Booking
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm">
+    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
       {FIELDS.map((f) => (
         <div key={f.key} className="flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-slate-700">{f.label}</span>

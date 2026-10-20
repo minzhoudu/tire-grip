@@ -20,7 +20,7 @@ export default async function SettingsHubPage({ params }: { params: Promise<{ sl
   return (
     <div className="flex flex-col gap-3">
       <div className="px-1">
-        <h1 className="text-xl font-bold">Podešavanja</h1>
+        <h1 className="font-mono text-xl font-bold">Podešavanja</h1>
         <p className="text-sm text-slate-600">Vidljivo samo vlasniku radnje.</p>
       </div>
 

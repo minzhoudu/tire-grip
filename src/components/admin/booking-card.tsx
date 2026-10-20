@@ -98,10 +98,10 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
   const chatUrl = whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `);
 
   return (
-    <article className={`rounded-2xl bg-white p-4 shadow-sm ${status === "pending" ? "ring-2 ring-accent-400" : ""}`}>
+    <article className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${status === "pending" ? "ring-2 ring-accent-400" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xl font-bold tabular-nums">{b.timeRange}</p>
+          <p className="font-mono text-xl font-bold tabular-nums">{b.timeRange}</p>
           <p className="mt-0.5 text-sm text-slate-600">
             {b.serviceName} · {vehicleTypeIcons[b.vehicleType]} {vehicleTypeLabels[b.vehicleType]}
             {b.bay !== null && <> · dizalica {b.bay}</>}
@@ -123,7 +123,7 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
           <a href={chatUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700">
             WhatsApp
           </a>
-          <span className="ml-auto font-semibold tabular-nums">{formatRsd(b.priceRsd)}</span>
+          <span className="ml-auto font-mono font-bold tabular-nums text-rust-600">{formatRsd(b.priceRsd)}</span>
         </div>
         {b.customerNote && <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">📝 {b.customerNote}</p>}
       </div>

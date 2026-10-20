@@ -42,7 +42,7 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
 
   return (
     <div className="flex flex-col gap-4">
-      <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm">
+      <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
         <label className="block">
           <span className="text-sm font-semibold text-slate-700">Datum</span>
           <input type="date" min={today} required className={`${input} mt-1.5`} value={date} onChange={(e) => setDate(e.target.value)} />
@@ -74,9 +74,9 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
       ) : (
         <ul className="flex flex-col gap-2">
           {exceptions.map((ex) => (
-            <li key={ex.id} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm">
+            <li key={ex.id} className="flex items-center gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{ex.date}</p>
+                <p className="font-mono font-bold">{ex.date}</p>
                 <p className="truncate text-sm text-slate-600">
                   {ex.closed ? "Zatvoreno" : `${ex.opensAt?.slice(0, 5)}–${ex.closesAt?.slice(0, 5)}`}
                   {ex.note ? ` · ${ex.note}` : ""}

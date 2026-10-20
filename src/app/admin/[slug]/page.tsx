@@ -54,7 +54,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
     <div className="flex flex-col gap-4">
       {view === "upcoming" && <AutoRefresh seconds={30} />}
 
-      <div className="flex rounded-xl bg-white p-1 text-sm font-semibold shadow-sm">
+      <div className="flex rounded-xl border-2 border-navy-900 bg-white p-1 text-sm font-semibold">
         {(
           [
             ["upcoming", "Predstojeći"],
@@ -72,7 +72,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       </div>
 
       {groups.size === 0 && (
-        <div className="rounded-2xl bg-white p-6 text-center text-slate-600 shadow-sm">
+        <div className="rounded-2xl border-2 border-navy-900 bg-white p-6 text-center text-slate-600">
           {view === "upcoming" ? (
             <>
               <p className="text-3xl" aria-hidden>
@@ -89,7 +89,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
 
       {[...groups].map(([date, cards]) => (
         <section key={date} aria-label={heading(date)}>
-          <h2 className="mb-2 px-1 text-sm font-bold tracking-wide text-slate-500 uppercase">{heading(date)}</h2>
+          <h2 className="mb-2 px-1 font-mono text-sm font-bold tracking-wide text-slate-500 uppercase">{heading(date)}</h2>
           <div className="flex flex-col gap-3">
             {cards.map((c) => (
               <BookingCard key={c.id} slug={slug} booking={c} />

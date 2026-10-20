@@ -23,7 +23,7 @@ export default async function AdminHome() {
         <ul className="mt-6 flex flex-col gap-3">
           {shops.map((s) => (
             <li key={s.slug}>
-              <Link href={`/admin/${s.slug}`} className="block rounded-2xl bg-white p-4 font-semibold shadow-sm active:bg-slate-50">
+              <Link href={`/admin/${s.slug}`} className="block rounded-2xl border-2 border-navy-900 bg-white p-4 font-semibold active:bg-slate-50">
                 🛞 {s.name}
               </Link>
             </li>
