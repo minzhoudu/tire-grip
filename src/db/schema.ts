@@ -36,6 +36,9 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { users } from "./auth-schema";
+
+export * from "./auth-schema";
 
 /* ----------------------------------------------------------------- enums */
 
@@ -129,10 +132,7 @@ export const shops = pgTable(
   ],
 );
 
-/**
- * Who can manage a shop. `user_id` points at the auth library's user table
- * (Better Auth), which is added in the auth step — kept as text for now.
- */
+/** Who can manage a shop: a Better Auth user with a role in that shop. */
 export const shopMembers = pgTable(
   "shop_members",
   {
@@ -140,7 +140,9 @@ export const shopMembers = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
-    userId: text("user_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     role: memberRole("role").notNull().default("owner"),
     createdAt: createdAt(),
   },

@@ -21,6 +21,9 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       DATABASE_URL: postgres://tiregrip:tiregrip@localhost:5432/tiregrip
+      # Test-only secret; production gets its own in Coolify.
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      BETTER_AUTH_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,7 +36,9 @@ jobs:
       # Schema straight from src/db/schema.ts + the custom exclusion constraint,
       # then the constraint test suite against a real Postgres.
       - run: pnpm db:push
-      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f drizzle/custom/0001_booking_no_overlap.sql
+      - run: pnpm db:constraints
+      # re-running must be a no-op
+      - run: pnpm db:constraints
       - run: pnpm db:test
       - run: pnpm db:seed
       # Unit tests + integration tests against the Postgres service above
