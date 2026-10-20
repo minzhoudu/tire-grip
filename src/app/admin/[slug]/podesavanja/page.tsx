@@ -1,14 +1,9 @@
 import { getDb } from "@/db";
-import { BookingRulesForm } from "@/components/admin/settings/booking-rules-form";
-import { ExceptionsEditor } from "@/components/admin/settings/exceptions-editor";
-import { ServicesEditor } from "@/components/admin/settings/services-editor";
-import { ShopInfoForm } from "@/components/admin/settings/shop-info-form";
-import { WorkingHoursEditor } from "@/components/admin/settings/working-hours-editor";
-import { shopToday } from "@/lib/availability";
+import { SettingsRow } from "@/components/admin/settings/settings-row";
 import { listExceptions, listServicesForSettings, listWorkingHours } from "@/server/settings";
 import { requireOwnerAccess } from "@/server/session";
 
-export default async function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function SettingsHubPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { shop } = await requireOwnerAccess(slug);
   const db = getDb();
@@ -18,50 +13,32 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
     listServicesForSettings(db, shop.id),
   ]);
 
+  const openDays = new Set(weeklyHours.map((h) => h.weekday)).size;
+  const activeServices = services.filter((s) => s.isActive).length;
+  const base = `/admin/${slug}/podesavanja`;
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3">
       <div className="px-1">
         <h1 className="text-xl font-bold">Podešavanja</h1>
         <p className="text-sm text-slate-600">Vidljivo samo vlasniku radnje.</p>
       </div>
 
-      <Section title="Podaci radnje">
-        <ShopInfoForm slug={slug} shop={{ name: shop.name, city: shop.city, address: shop.address, phone: shop.phone }} />
-      </Section>
-
-      <Section title="Pravila zakazivanja">
-        <BookingRulesForm
-          slug={slug}
-          rules={{
-            bays: shop.bays,
-            slotStepMin: shop.slotStepMin,
-            bookingHorizonDays: shop.bookingHorizonDays,
-            minNoticeMin: shop.minNoticeMin,
-            autoConfirm: shop.autoConfirm,
-          }}
-        />
-      </Section>
-
-      <Section title="Radno vreme">
-        <WorkingHoursEditor slug={slug} weeklyHours={weeklyHours} />
-      </Section>
-
-      <Section title="Praznici i posebno radno vreme">
-        <ExceptionsEditor slug={slug} exceptions={exceptions} today={shopToday(shop, new Date())} />
-      </Section>
-
-      <Section title="Usluge i cene">
-        <ServicesEditor slug={slug} services={services} />
-      </Section>
+      <SettingsRow href={`${base}/radnja`} icon="🏪" title="Podaci radnje" subtitle={[shop.city, shop.address].filter(Boolean).join(" · ") || "Naziv, grad, adresa, telefon"} />
+      <SettingsRow
+        href={`${base}/pravila`}
+        icon="⚙️"
+        title="Pravila zakazivanja"
+        subtitle={`${shop.bays} ${shop.bays === 1 ? "dizalica" : "dizalice"} · ${shop.slotStepMin} min korak · auto-potvrda ${shop.autoConfirm ? "uključena" : "isključena"}`}
+      />
+      <SettingsRow href={`${base}/radno-vreme`} icon="🕒" title="Radno vreme" subtitle={openDays === 0 ? "Radnja je zatvorena svih dana" : `Otvoreno ${openDays}/7 dana u nedelji`} />
+      <SettingsRow
+        href={`${base}/praznici`}
+        icon="📅"
+        title="Praznici i posebno radno vreme"
+        subtitle={exceptions.length === 0 ? "Nema predstojećih izuzetaka" : `${exceptions.length} predstojeć${exceptions.length === 1 ? "i" : "ih"}`}
+      />
+      <SettingsRow href={`${base}/usluge`} icon="🛞" title="Usluge i cene" subtitle={`${activeServices}/${services.length} aktivno`} />
     </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <h2 className="px-1 text-base font-bold text-slate-800">{title}</h2>
-      {children}
-    </section>
   );
 }

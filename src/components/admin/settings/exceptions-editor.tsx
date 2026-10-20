@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteExceptionAction, upsertExceptionAction } from "@/app/admin/[slug]/podesavanja/actions";
-import { input, primaryButton, resultBanner, secondaryButton } from "./ui";
+import { useToast } from "@/components/ui/toast";
+import { ToggleRow } from "@/components/ui/toggle";
+import { input, primaryButton, secondaryButton } from "./ui";
 
 export interface ExceptionRow {
   id: string;
@@ -16,12 +18,12 @@ export interface ExceptionRow {
 
 export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; exceptions: ExceptionRow[]; today: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [date, setDate] = useState(today);
   const [closed, setClosed] = useState(true);
   const [opensAt, setOpensAt] = useState("08:00");
   const [closesAt, setClosesAt] = useState("17:00");
   const [note, setNote] = useState("");
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
   function submit(e: React.FormEvent) {
@@ -29,10 +31,10 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
     startTransition(async () => {
       const r = await upsertExceptionAction({ slug, date, closed, opensAt: closed ? undefined : opensAt, closesAt: closed ? undefined : closesAt, note });
       if (!r.ok) {
-        setMessage({ ok: false, text: r.error });
+        toast(r.error, "error");
         return;
       }
-      setMessage({ ok: true, text: "Sačuvano." });
+      toast("Sačuvano.");
       setNote("");
       router.refresh();
     });
@@ -45,10 +47,7 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
           <span className="text-sm font-semibold text-slate-700">Datum</span>
           <input type="date" min={today} required className={`${input} mt-1.5`} value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
-        <label className="flex items-center gap-2.5 rounded-xl bg-slate-50 px-3.5 py-3">
-          <input type="checkbox" className="h-5 w-5" checked={closed} onChange={(e) => setClosed(e.target.checked)} />
-          <span className="text-sm font-semibold text-slate-700">Radnja ne radi tog dana</span>
-        </label>
+        <ToggleRow title="Radnja ne radi tog dana" checked={closed} onChange={setClosed} />
         {!closed && (
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -65,7 +64,6 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
           <span className="text-sm font-semibold text-slate-700">Napomena (npr. „Dan primirja“)</span>
           <input className={`${input} mt-1.5`} maxLength={120} value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
-        {message && resultBanner(message.ok, message.text)}
         <button type="submit" disabled={pending} className={primaryButton}>
           {pending ? "Čuvam…" : "Sačuvaj izuzetak"}
         </button>
@@ -90,6 +88,7 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
                 onClick={() =>
                   startTransition(async () => {
                     await deleteExceptionAction({ slug, id: ex.id });
+                    toast("Uklonjeno.");
                     router.refresh();
                   })
                 }

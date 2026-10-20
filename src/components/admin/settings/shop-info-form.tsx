@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { updateShopInfoAction } from "@/app/admin/[slug]/podesavanja/actions";
-import { input, primaryButton, resultBanner } from "./ui";
+import { useToast } from "@/components/ui/toast";
+import { input, primaryButton } from "./ui";
 
 export function ShopInfoForm({
   slug,
@@ -11,21 +12,21 @@ export function ShopInfoForm({
   slug: string;
   shop: { name: string; city: string | null; address: string | null; phone: string | null };
 }) {
+  const toast = useToast();
   const [fields, setFields] = useState({ name: shop.name, city: shop.city ?? "", address: shop.address ?? "", phone: shop.phone ?? "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    setSaved(false);
     startTransition(async () => {
       const r = await updateShopInfoAction({ slug, ...fields });
       if (r.ok) {
         setErrors({});
-        setSaved(true);
+        toast("Sačuvano.");
       } else {
         setErrors(r.errors);
+        if (r.errors.form) toast(r.errors.form, "error");
       }
     });
   }
@@ -48,14 +49,11 @@ export function ShopInfoForm({
             onChange={(e) => {
               setFields((f) => ({ ...f, [key]: e.target.value }));
               setErrors((er) => ({ ...er, [key]: "" }));
-              setSaved(false);
             }}
           />
           {errors[key] && <span className="mt-1 block text-sm text-red-700">{errors[key]}</span>}
         </label>
       ))}
-      {errors.form && resultBanner(false, errors.form)}
-      {saved && resultBanner(true, "Sačuvano.")}
       <button type="submit" disabled={pending} className={primaryButton}>
         {pending ? "Čuvam…" : "Sačuvaj"}
       </button>

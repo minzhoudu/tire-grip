@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { changeStatusAction } from "@/app/admin/[slug]/actions";
+import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { vehicleTypeIcons, vehicleTypeLabels } from "@/lib/booking/messages";
 import { ACTIONS, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
@@ -56,9 +57,9 @@ function holdRefresh(on: boolean) {
 
 export function BookingCard({ slug, booking: b }: { slug: string; booking: BookingCardData }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [after, setAfter] = useState<{ action: BookingAction; status: BookingStatus; messageUrl: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<BookingAction | null>(null);
 
   useEffect(() => () => holdRefresh(false), []);
@@ -72,11 +73,10 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
       return;
     }
     setConfirming(null);
-    setError(null);
     startTransition(async () => {
       const r = await changeStatusAction({ slug, bookingId: b.id, action });
       if (!r.ok) {
-        setError(r.reason === "not_allowed" ? "Status je u međuvremenu promenjen. Osvežavam…" : "Nije uspelo. Pokušajte ponovo.");
+        toast(r.reason === "not_allowed" ? "Status je u međuvremenu promenjen. Osvežavam…" : "Nije uspelo. Pokušajte ponovo.", "error");
         router.refresh();
         return;
       }
@@ -163,7 +163,6 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
           </div>
         )
       )}
-      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
     </article>
   );
 }

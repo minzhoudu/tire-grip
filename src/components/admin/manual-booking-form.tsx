@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { adminSlotsAction, createManualBookingAction } from "@/app/admin/[slug]/actions";
+import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import type { VehicleType } from "@/lib/availability/pricing";
 import { vehicleTypeIcons, vehicleTypeLabels } from "@/lib/booking/messages";
@@ -18,6 +19,7 @@ const input =
   "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20";
 
 export function ManualBookingForm({ slug, services, today }: { slug: string; services: PublicService[]; today: string }) {
+  const toast = useToast();
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const service = services.find((s) => s.id === serviceId);
   const [vehicleType, setVehicleType] = useState<VehicleType>(service?.prices[0]?.vehicleType ?? "car");
@@ -106,7 +108,7 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
         setReload((k) => k + 1); // reload slots for the same day
         setErrors({ startsAt: "Termin je upravo zauzet. Izaberite drugi." });
       } else {
-        setErrors({ form: "Usluga trenutno nije dostupna." });
+        toast("Usluga trenutno nije dostupna.", "error");
       }
     });
   }
@@ -213,8 +215,6 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
           {errors[key] && <span className="mt-1 block text-sm text-red-700">{errors[key]}</span>}
         </label>
       ))}
-
-      {errors.form && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{errors.form}</p>}
 
       <button
         type="submit"

@@ -3,36 +3,60 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createBlockAction, deleteBlockAction } from "@/app/admin/[slug]/actions";
+import { useToast } from "@/components/ui/toast";
 
 const input =
   "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20";
 
+function BaySelector({ bays, value, onChange }: { bays: number; value: number | null; onChange: (v: number | null) => void }) {
+  const options: { value: number | null; label: string }[] = [
+    { value: null, label: "Sve" },
+    ...Array.from({ length: bays }, (_, i) => ({ value: i + 1, label: `Dizalica ${i + 1}` })),
+  ];
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={o.label}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={`rounded-full border px-4 py-2.5 text-sm font-semibold ${
+            value === o.value ? "border-navy-900 bg-navy-900 text-white" : "border-slate-200 bg-slate-100 text-slate-700"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function BlockForm({ slug, bays, today }: { slug: string; bays: number; today: string }) {
   const router = useRouter();
+  const toast = useToast();
   const [date, setDate] = useState(today);
   const [from, setFrom] = useState("12:00");
   const [to, setTo] = useState("13:00");
   const [bay, setBay] = useState<number | null>(null);
   const [reason, setReason] = useState("");
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    setMessage(null);
+    setWarning(null);
     startTransition(async () => {
       const r = await createBlockAction({ slug, date, from, to, bay, reason });
       if (!r.ok) {
-        setMessage({ ok: false, text: r.error });
+        toast(r.error, "error");
         return;
       }
-      setMessage({
-        ok: true,
-        text:
-          r.overlappingBookings > 0
-            ? `Blokirano. Pažnja: u tom periodu već ima ${r.overlappingBookings} zakazan(ih) termin(a). Oni nisu pomereni, javite kupcima.`
-            : "Blokirano.",
-      });
+      if (r.overlappingBookings > 0) {
+        setWarning(`Pažnja: u tom periodu već ima ${r.overlappingBookings} zakazan(ih) termin(a). Oni nisu pomereni, javite kupcima.`);
+      } else {
+        toast("Blokirano.");
+      }
       setReason("");
       router.refresh();
     });
@@ -55,29 +79,18 @@ export function BlockForm({ slug, bays, today }: { slug: string; bays: number; t
         </label>
       </div>
       {bays > 1 && (
-        <label className="block">
+        <div>
           <span className="text-sm font-semibold text-slate-700">Dizalica</span>
-          <select
-            className={`${input} mt-1.5`}
-            value={bay ?? ""}
-            onChange={(e) => setBay(e.target.value === "" ? null : Number(e.target.value))}
-          >
-            <option value="">Sve dizalice (cela radnja)</option>
-            {Array.from({ length: bays }, (_, i) => (
-              <option key={i + 1} value={i + 1}>
-                Dizalica {i + 1}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="mt-1.5">
+            <BaySelector bays={bays} value={bay} onChange={setBay} />
+          </div>
+        </div>
       )}
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Razlog (vidite samo vi)</span>
         <input className={`${input} mt-1.5`} placeholder="npr. pauza, servis dizalice" maxLength={120} value={reason} onChange={(e) => setReason(e.target.value)} />
       </label>
-      {message && (
-        <p className={`rounded-lg px-3 py-2 text-sm ${message.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{message.text}</p>
-      )}
+      {warning && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{warning}</p>}
       <button
         type="submit"
         disabled={pending}
@@ -97,6 +110,7 @@ export function BlockList({
   blocks: { id: string; when: string; bay: string | null; reason: string | null }[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
 
   if (blocks.length === 0) return <p className="px-1 text-sm text-slate-500">Nema predstojećih blokada.</p>;
@@ -115,6 +129,7 @@ export function BlockList({
             onClick={() =>
               startTransition(async () => {
                 await deleteBlockAction({ slug, blockId: b.id });
+                toast("Uklonjeno.");
                 router.refresh();
               })
             }

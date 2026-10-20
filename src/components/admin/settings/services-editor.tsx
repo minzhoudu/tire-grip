@@ -11,6 +11,8 @@ import {
 } from "@/app/admin/[slug]/podesavanja/actions";
 import { formatRsd } from "@/lib/availability/labels";
 import { vehicleTypeLabels } from "@/lib/booking/messages";
+import { useToast } from "@/components/ui/toast";
+import { Toggle, ToggleRow } from "@/components/ui/toggle";
 import type { ServiceKind, ServiceWithPrices } from "@/server/settings";
 import { input, primaryButton, resultBanner, secondaryButton } from "./ui";
 
@@ -138,10 +140,12 @@ function ServiceForm({
         <span className="text-sm font-semibold text-slate-700">Trajanje (min, podrazumevano)</span>
         <input type="number" min={5} max={480} className={`${input} mt-1.5`} value={form.durationMin} onChange={(e) => setForm((f) => ({ ...f, durationMin: e.target.value }))} />
       </label>
-      <label className="flex items-center gap-2.5 rounded-xl bg-white px-3.5 py-3">
-        <input type="checkbox" className="h-5 w-5" checked={form.bookable} onChange={(e) => setForm((f) => ({ ...f, bookable: e.target.checked }))} />
-        <span className="text-sm font-semibold text-slate-700">Kupci mogu da zakažu ovu uslugu (isključite za npr. cenovnik)</span>
-      </label>
+      <ToggleRow
+        title="Kupci mogu da zakažu ovu uslugu"
+        description="Isključite za npr. stavku u cenovniku koja se ne zakazuje"
+        checked={form.bookable}
+        onChange={(v) => setForm((f) => ({ ...f, bookable: v }))}
+      />
 
       <div>
         <p className="mb-1.5 text-sm font-semibold text-slate-700">Cena po tipu vozila</p>
@@ -200,14 +204,13 @@ function ServiceForm({
 
 export function ServicesEditor({ slug, services }: { slug: string; services: ServiceWithPrices[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   return (
     <div className="flex flex-col gap-3">
-      {notice && resultBanner(false, notice)}
       <ul className="flex flex-col gap-2">
         {services.map((s, idx) =>
           editingId === s.id ? (
@@ -219,6 +222,7 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
                 onCancel={() => setEditingId(null)}
                 onSaved={() => {
                   setEditingId(null);
+                  toast("Sačuvano.");
                   router.refresh();
                 }}
                 submit={(slug, form) =>
@@ -250,7 +254,22 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
                       : s.prices.map((p) => `${vehicleTypeLabels[p.vehicleType]} ${formatRsd(p.priceRsd)}`).join(" · ")}
                   </p>
                 </div>
-                <div className="flex shrink-0 flex-col gap-1">
+                <div className="flex shrink-0 items-center gap-2">
+                  <Toggle
+                    checked={s.isActive}
+                    disabled={pending}
+                    label={s.isActive ? "Isključi uslugu" : "Uključi uslugu"}
+                    onChange={(v) =>
+                      startTransition(async () => {
+                        await setServiceActiveAction({ slug, serviceId: s.id, isActive: v });
+                        router.refresh();
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex gap-1">
                   <button type="button" disabled={idx === 0 || pending} onClick={() => startTransition(async () => { await moveServiceAction({ slug, serviceId: s.id, direction: "up" }); router.refresh(); })} className="rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-30">
                     ↑
                   </button>
@@ -258,36 +277,27 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
                     ↓
                   </button>
                 </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={() => setEditingId(s.id)} className={secondaryButton}>
-                  Izmeni
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => startTransition(async () => { await setServiceActiveAction({ slug, serviceId: s.id, isActive: !s.isActive }); router.refresh(); })}
-                  className={secondaryButton}
-                >
-                  {s.isActive ? "Isključi" : "Uključi"}
-                </button>
-                {!s.hasBookings && (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        const r = await deleteServiceAction({ slug, serviceId: s.id });
-                        if (!r.ok) setNotice(r.reason === "has_bookings" ? "Usluga ima zakazane termine, može se samo isključiti." : "Brisanje nije uspelo.");
-                        else setNotice(null);
-                        router.refresh();
-                      })
-                    }
-                    className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
-                  >
-                    Obriši
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setEditingId(s.id)} className={secondaryButton}>
+                    Izmeni
                   </button>
-                )}
+                  {!s.hasBookings && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          const r = await deleteServiceAction({ slug, serviceId: s.id });
+                          if (!r.ok) toast(r.reason === "has_bookings" ? "Usluga ima zakazane termine, može se samo isključiti." : "Brisanje nije uspelo.", "error");
+                          router.refresh();
+                        })
+                      }
+                      className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
+                    >
+                      Obriši
+                    </button>
+                  )}
+                </div>
               </div>
             </li>
           ),
@@ -302,6 +312,7 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
           onCancel={() => setAdding(false)}
           onSaved={() => {
             setAdding(false);
+            toast("Dodato.");
             router.refresh();
           }}
           submit={(slug, form) =>
