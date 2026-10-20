@@ -8,7 +8,11 @@ import type { VehicleType } from "@/lib/availability/pricing";
 import { vehicleTypeIcons, vehicleTypeLabels } from "@/lib/booking/messages";
 import type { PublicService } from "@/server/shops";
 
-type Slots = { state: "idle" | "loading" | "error" } | { state: "ready"; status: string; slots: { time: string; startsAt: string; available: boolean }[] };
+type Slots =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "error" }
+  | { state: "ready"; status: string; slots: { time: string; startsAt: string; available: boolean }[] };
 
 const input =
   "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20";

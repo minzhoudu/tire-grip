@@ -36,7 +36,9 @@ jobs:
       # Schema straight from src/db/schema.ts + the custom exclusion constraint,
       # then the constraint test suite against a real Postgres.
       - run: pnpm db:push
-      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f drizzle/custom/0001_booking_no_overlap.sql
+      - run: pnpm db:constraints
+      # re-running must be a no-op
+      - run: pnpm db:constraints
       - run: pnpm db:test
       - run: pnpm db:seed
       # Unit tests + integration tests against the Postgres service above

@@ -9,6 +9,7 @@
 import "dotenv/config";
 import { closeDb, getDb } from "../src/db/index.ts";
 import { createShopUser } from "../src/server/accounts.ts";
+import { pgErrorCode } from "../src/server/bookings.ts";
 import { MIN_PASSWORD_LENGTH, getAuth } from "../src/server/auth.ts";
 
 const [email, password, name, shopSlug, role = "owner"] = process.argv.slice(2);
@@ -35,6 +36,13 @@ try {
         ? `Nalog ${email} je napravljen i dodat u radnju ${shopSlug} (${role}).`
         : `Nalog ${email} već postoji; dodat je u radnju ${shopSlug} (${role}). Lozinka nije menjana.`,
     );
+  }
+} catch (err) {
+  if (pgErrorCode(err) === "42P01") {
+    console.error("Tabele u bazi ne postoje ili nisu ažurne. Pokreni: pnpm db:setup (pa pnpm db:seed ako radnja još ne postoji).");
+    process.exitCode = 1;
+  } else {
+    throw err;
   }
 } finally {
   await closeDb();

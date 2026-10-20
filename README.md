@@ -10,11 +10,8 @@ Mobile-first SaaS za zakazivanje zamene guma kod vulkanizera: kupac kroz chat sa
 cp .env.example .env
 pnpm install
 pnpm db:up                 # Postgres u Dockeru
-pnpm db:generate           # prva migracija iz src/db/schema.ts
-pnpm drizzle-kit generate --custom --name=booking_no_overlap
-#   → u generisani SQL fajl nalepi sadržaj drizzle/custom/0001_booking_no_overlap.sql
-pnpm db:migrate
-pnpm db:test               # testovi ograničenja baze (rollback, bezbedno)
+pnpm db:setup              # šema iz src/db/schema.ts + pravilo protiv duplih termina
+pnpm db:test               # testovi ograničenja baze (rollback, bezbedno; traži psql)
 pnpm db:seed               # demo radnja "Brzi Točak" → /brzi-tocak
 pnpm dev
 ```
@@ -75,6 +72,7 @@ Testovi: `tests/booking-flow.test.ts`, `tests/phone-and-messages.test.ts`, `test
 
 ```bash
 # u .env: BETTER_AUTH_SECRET (openssl rand -base64 32) i BETTER_AUTH_URL=http://localhost:3000
+# posle promene šeme: pnpm db:setup
 pnpm admin:create pera@example.rs 'bar-10-karaktera' "Pera" brzi-tocak        # vlasnik
 pnpm admin:create radnik@example.rs 'bar-10-karaktera' "Mika" brzi-tocak staff # radnik
 ```
