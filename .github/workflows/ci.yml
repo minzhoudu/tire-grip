@@ -48,7 +48,7 @@ jobs:
       - run: pnpm db:test
       - run: pnpm db:seed
       # Unit tests + integration tests against the Postgres service above
-      - run: pnpm test --reporter=default --reporter=json --outputFile=vitest-results.json
+      - run: pnpm test --reporter=default --reporter=github-actions --reporter=json --outputFile=vitest-results.json
       - name: Test summary
         if: always()
         run: |
