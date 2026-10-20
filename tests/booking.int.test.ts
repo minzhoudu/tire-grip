@@ -1,7 +1,7 @@
 /**
  * Integration test: booking requests against a real Postgres.
  * Needs DATABASE_URL with the current schema and the bookings_no_overlap
- * constraint (CI does `db:push` + the custom SQL). Skipped otherwise.
+ * constraint (CI applies the migrations with `pnpm db:setup`). Skipped otherwise.
  *
  * Creates its own throwaway shop (open every day 08–17, 2 bays) so it doesn't
  * depend on the seed or on what weekday the test runs.
@@ -96,10 +96,9 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
       phones.map((phone, i) => createBookingRequest(db, request({ phone, name: `Paralelni ${i}`, startsAt: at(11) }))),
     );
 
-    const winners = results.filter((r) => r.ok);
-    expect(winners).toHaveLength(2);
-    expect(winners.map((r) => (r.ok ? r.booking.bay : 0)).sort()).toEqual([1, 2]);
-    expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, reason: "slot_unavailable" }]);
+    // One line per request so a failure shows exactly what each one got.
+    const outcomes = results.map((r) => (r.ok ? `bay ${r.booking.bay}` : r.reason)).sort();
+    expect(outcomes).toEqual(["bay 1", "bay 2", "slot_unavailable"]);
 
     const rows = await db
       .select({ id: bookings.id })
@@ -113,6 +112,21 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
       .from(customers)
       .where(and(eq(customers.shopId, shopId), inArray(customers.phone, ["+381642000001", "+381642000002", "+381642000003"])));
     expect(saved).toHaveLength(2);
+  });
+
+  it("under load (10 parallel requests, 5 rounds) never errors: 2 winners, the rest 'taken'", async () => {
+    const db = getDb();
+    for (let round = 0; round < 5; round++) {
+      // its own day, so it doesn't collide with the other tests; one slot per round (08:00 … 10:00)
+      const startsAt = zonedToUtc(addDays(date, 1), 8 * 60 + round * 30, TZ).toISOString();
+      const results = await Promise.all(
+        Array.from({ length: 10 }, (_, i) =>
+          createBookingRequest(db, request({ phone: `064 9${round}0 00${String(i).padStart(2, "0")}`, name: `Talas ${round}-${i}`, startsAt })),
+        ),
+      );
+      const outcomes = results.map((r) => (r.ok ? `bay ${r.booking.bay}` : r.reason)).sort();
+      expect(outcomes, `round ${round}`).toEqual(["bay 1", "bay 2", ...Array(8).fill("slot_unavailable")]);
+    }
   });
 
   it("a longer service (SUV, 60 min) needs both half-hours free", async () => {

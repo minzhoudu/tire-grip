@@ -33,16 +33,22 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      # Schema straight from src/db/schema.ts + the custom exclusion constraint,
-      # then the constraint test suite against a real Postgres.
-      - run: pnpm db:push
-      - run: pnpm db:constraints
-      # re-running must be a no-op
-      - run: pnpm db:constraints
+      # schema.ts and drizzle/ must agree: a schema change without a migration fails here.
+      - name: Migrations match src/db/schema.ts
+        run: |
+          pnpm db:generate
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            git status --porcelain drizzle
+            echo "::error::src/db/schema.ts changed without a migration. Run pnpm db:generate and commit drizzle/."
+            exit 1
+          fi
+      # Build the database exactly like production: from migrations. Second run must be a no-op.
+      - run: pnpm db:setup
+      - run: pnpm db:setup
       - run: pnpm db:test
       - run: pnpm db:seed
       # Unit tests + integration tests against the Postgres service above
-      - run: pnpm test --reporter=default --reporter=json --outputFile=vitest-results.json
+      - run: pnpm test --reporter=default --reporter=github-actions --reporter=json --outputFile=vitest-results.json
       - name: Test summary
         if: always()
         run: |
