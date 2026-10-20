@@ -285,8 +285,8 @@ describe("open status banner", () => {
 describe("price and duration per vehicle type", () => {
   const service = { durationMin: 30, bookable: true, isActive: true };
   const prices = [
-    { vehicleType: "car" as const, priceRsd: 1500, durationMin: null },
-    { vehicleType: "suv" as const, priceRsd: 2000, durationMin: 40 },
+    { vehicleTypeId: "car", priceRsd: 1500, durationMin: null },
+    { vehicleTypeId: "suv", priceRsd: 2000, durationMin: 40 },
   ];
 
   it("uses the service duration unless the price row overrides it", () => {

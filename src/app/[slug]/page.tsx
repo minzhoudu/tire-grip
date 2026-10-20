@@ -38,6 +38,7 @@ export default async function ShopBookingPage({ params }: Props) {
     open: status.open,
     statusText: openStatusText(status, shopToday(ctx.settings, now)),
     services: ctx.services,
+    vehicleTypes: ctx.vehicleTypes,
   };
 
   return <BookingChat shop={shop} />;

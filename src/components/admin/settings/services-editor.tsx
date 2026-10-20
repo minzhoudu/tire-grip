@@ -10,10 +10,9 @@ import {
   updateServiceAction,
 } from "@/app/admin/[slug]/podesavanja/actions";
 import { formatRsd } from "@/lib/availability/labels";
-import { vehicleTypeLabels } from "@/lib/booking/messages";
 import { useToast } from "@/components/ui/toast";
 import { Toggle, ToggleRow } from "@/components/ui/toggle";
-import type { ServiceKind, ServiceWithPrices } from "@/server/settings";
+import type { ServiceKind, ServiceWithPrices, VehicleTypeWithUsage } from "@/server/settings";
 import { input, primaryButton, resultBanner, secondaryButton } from "./ui";
 
 const KIND_LABELS: Record<ServiceKind, string> = {
@@ -25,7 +24,6 @@ const KIND_LABELS: Record<ServiceKind, string> = {
   other: "Drugo",
 };
 const KINDS = Object.keys(KIND_LABELS) as ServiceKind[];
-const VEHICLE_TYPES = ["car", "suv", "van"] as const;
 
 interface PriceField {
   enabled: boolean;
@@ -40,7 +38,7 @@ interface FormState {
   description: string;
   durationMin: string;
   bookable: boolean;
-  prices: Record<(typeof VEHICLE_TYPES)[number], PriceField>;
+  prices: Record<string, PriceField>;
 }
 
 function emptyForm(): FormState {
@@ -51,14 +49,13 @@ function emptyForm(): FormState {
     description: "",
     durationMin: "30",
     bookable: true,
-    prices: { car: { enabled: true, priceRsd: "", durationMin: "" }, suv: { enabled: false, priceRsd: "", durationMin: "" }, van: { enabled: false, priceRsd: "", durationMin: "" } },
+    prices: {},
   };
 }
 
 function formFromService(s: ServiceWithPrices): FormState {
   const base = emptyForm();
-  for (const vt of VEHICLE_TYPES) base.prices[vt] = { enabled: false, priceRsd: "", durationMin: "" };
-  for (const p of s.prices) base.prices[p.vehicleType] = { enabled: true, priceRsd: String(p.priceRsd), durationMin: p.durationMin ? String(p.durationMin) : "" };
+  for (const p of s.prices) base.prices[p.vehicleTypeId] = { enabled: true, priceRsd: String(p.priceRsd), durationMin: p.durationMin ? String(p.durationMin) : "" };
   return {
     kind: s.kind as ServiceKind,
     name: s.name,
@@ -70,17 +67,24 @@ function formFromService(s: ServiceWithPrices): FormState {
   };
 }
 
+function priceField(form: FormState, vehicleTypeId: string): PriceField {
+  return form.prices[vehicleTypeId] ?? { enabled: false, priceRsd: "", durationMin: "" };
+}
+
 function buildPrices(form: FormState) {
-  return VEHICLE_TYPES.filter((vt) => form.prices[vt].enabled).map((vt) => ({
-    vehicleType: vt,
-    priceRsd: Number(form.prices[vt].priceRsd) || 0,
-    durationMin: form.prices[vt].durationMin ? Number(form.prices[vt].durationMin) : null,
-  }));
+  return Object.entries(form.prices)
+    .filter(([, f]) => f.enabled)
+    .map(([vehicleTypeId, f]) => ({
+      vehicleTypeId,
+      priceRsd: Number(f.priceRsd) || 0,
+      durationMin: f.durationMin ? Number(f.durationMin) : null,
+    }));
 }
 
 function ServiceForm({
   slug,
   initial,
+  vehicleTypes,
   onSaved,
   onCancel,
   submitLabel,
@@ -88,6 +92,8 @@ function ServiceForm({
 }: {
   slug: string;
   initial: FormState;
+  /** Shown in the price picker: active types, plus any inactive one the service already has a price for (so saving doesn't silently drop it). */
+  vehicleTypes: VehicleTypeWithUsage[];
   onSaved: () => void;
   onCancel?: () => void;
   submitLabel: string;
@@ -96,6 +102,7 @@ function ServiceForm({
   const [form, setForm] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const pickable = vehicleTypes.filter((vt) => vt.isActive || priceField(form, vt.id).enabled);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -149,42 +156,51 @@ function ServiceForm({
 
       <div>
         <p className="mb-1.5 text-sm font-semibold text-slate-700">Cena po tipu vozila</p>
-        <div className="flex flex-col gap-2">
-          {VEHICLE_TYPES.map((vt) => (
-            <div key={vt} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2.5">
-              <label className="flex w-36 shrink-0 items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={form.prices[vt].enabled}
-                  onChange={(e) => setForm((f) => ({ ...f, prices: { ...f.prices, [vt]: { ...f.prices[vt], enabled: e.target.checked } } }))}
-                />
-                <span className="text-sm">{vehicleTypeLabels[vt]}</span>
-              </label>
-              {form.prices[vt].enabled && (
-                <>
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="Cena (din)"
-                    className={`${input} py-1.5`}
-                    value={form.prices[vt].priceRsd}
-                    onChange={(e) => setForm((f) => ({ ...f, prices: { ...f.prices, [vt]: { ...f.prices[vt], priceRsd: e.target.value } } }))}
-                  />
-                  <input
-                    type="number"
-                    min={5}
-                    max={480}
-                    placeholder="Trajanje"
-                    className={`${input} py-1.5`}
-                    value={form.prices[vt].durationMin}
-                    onChange={(e) => setForm((f) => ({ ...f, prices: { ...f.prices, [vt]: { ...f.prices[vt], durationMin: e.target.value } } }))}
-                  />
-                </>
-              )}
-            </div>
-          ))}
-        </div>
+        {pickable.length === 0 ? (
+          <p className="rounded-xl bg-white px-3 py-2.5 text-sm text-slate-500">Radnja nema definisane vrste vozila. Dodajte ih u „Vrste vozila".</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {pickable.map((vt) => {
+              const f = priceField(form, vt.id);
+              return (
+                <div key={vt.id} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2.5">
+                  <label className="flex w-36 shrink-0 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={f.enabled}
+                      onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), enabled: e.target.checked } } }))}
+                    />
+                    <span className="text-sm">
+                      {vt.icon} {vt.label}
+                    </span>
+                  </label>
+                  {f.enabled && (
+                    <>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Cena (din)"
+                        className={`${input} py-1.5`}
+                        value={f.priceRsd}
+                        onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), priceRsd: e.target.value } } }))}
+                      />
+                      <input
+                        type="number"
+                        min={5}
+                        max={480}
+                        placeholder="Trajanje"
+                        className={`${input} py-1.5`}
+                        value={f.durationMin}
+                        onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), durationMin: e.target.value } } }))}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {error && resultBanner(false, error)}
@@ -202,12 +218,13 @@ function ServiceForm({
   );
 }
 
-export function ServicesEditor({ slug, services }: { slug: string; services: ServiceWithPrices[] }) {
+export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string; services: ServiceWithPrices[]; vehicleTypes: VehicleTypeWithUsage[] }) {
   const router = useRouter();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const vehicleTypeById = new Map(vehicleTypes.map((vt) => [vt.id, vt]));
 
   return (
     <div className="flex flex-col gap-3">
@@ -218,6 +235,7 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
               <ServiceForm
                 slug={slug}
                 initial={formFromService(s)}
+                vehicleTypes={vehicleTypes}
                 submitLabel="Sačuvaj izmene"
                 onCancel={() => setEditingId(null)}
                 onSaved={() => {
@@ -251,7 +269,7 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
                   <p className="mt-1 text-sm text-slate-700">
                     {s.prices.length === 0
                       ? "Bez cene"
-                      : s.prices.map((p) => `${vehicleTypeLabels[p.vehicleType]} ${formatRsd(p.priceRsd)}`).join(" · ")}
+                      : s.prices.map((p) => `${vehicleTypeById.get(p.vehicleTypeId)?.label ?? "?"} ${formatRsd(p.priceRsd)}`).join(" · ")}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -308,6 +326,7 @@ export function ServicesEditor({ slug, services }: { slug: string; services: Ser
         <ServiceForm
           slug={slug}
           initial={emptyForm()}
+          vehicleTypes={vehicleTypes}
           submitLabel="Dodaj uslugu"
           onCancel={() => setAdding(false)}
           onSaved={() => {

@@ -14,7 +14,7 @@ export default async function NewBookingPage({ params }: { params: Promise<{ slu
     <div>
       <h1 className="mb-1 px-1 font-mono text-xl font-bold">Novi termin</h1>
       <p className="mb-4 px-1 text-sm text-slate-600">Za kupce koji zovu telefonom. Termin se odmah upisuje kao potvrđen.</p>
-      <ManualBookingForm slug={slug} services={services} today={shopToday(shop, new Date())} />
+      <ManualBookingForm slug={slug} services={services} vehicleTypes={ctx?.vehicleTypes ?? []} today={shopToday(shop, new Date())} />
     </div>
   );
 }

@@ -7,7 +7,7 @@
 import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { closeDb, getDb } from "./index";
-import { bookings, scheduleExceptions, servicePrices, services, shops, workingHours } from "./schema";
+import { bookings, scheduleExceptions, servicePrices, services, shops, vehicleTypes, workingHours } from "./schema";
 
 const SLUG = "brzi-tocak";
 
@@ -50,10 +50,20 @@ async function main() {
       .returning();
     const byKind = Object.fromEntries(svc.map((s) => [s.kind, s]));
 
-    const price = (kind: keyof typeof byKind, car: number, suv: number, van: number, suvMin?: number, vanMin?: number) => [
-      { shopId: shop.id, serviceId: byKind[kind]!.id, vehicleType: "car" as const, priceRsd: car },
-      { shopId: shop.id, serviceId: byKind[kind]!.id, vehicleType: "suv" as const, priceRsd: suv, durationMin: suvMin },
-      { shopId: shop.id, serviceId: byKind[kind]!.id, vehicleType: "van" as const, priceRsd: van, durationMin: vanMin },
+    const vt = await tx
+      .insert(vehicleTypes)
+      .values([
+        { shopId: shop.id, label: "Putničko", icon: "🚗", sortOrder: 0 },
+        { shopId: shop.id, label: "SUV / džip", icon: "🚙", sortOrder: 1 },
+        { shopId: shop.id, label: "Kombi", icon: "🚐", sortOrder: 2 },
+      ])
+      .returning();
+    const [car, suvType, van] = vt;
+
+    const price = (kind: keyof typeof byKind, car_: number, suv: number, van_: number, suvMin?: number, vanMin?: number) => [
+      { shopId: shop.id, serviceId: byKind[kind]!.id, vehicleTypeId: car!.id, priceRsd: car_ },
+      { shopId: shop.id, serviceId: byKind[kind]!.id, vehicleTypeId: suvType!.id, priceRsd: suv, durationMin: suvMin },
+      { shopId: shop.id, serviceId: byKind[kind]!.id, vehicleTypeId: van!.id, priceRsd: van_, durationMin: vanMin },
     ];
     await tx.insert(servicePrices).values([
       ...price("seasonal_swap", 1500, 2000, 2500, 40, 45),

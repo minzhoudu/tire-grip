@@ -35,6 +35,7 @@ export type CreateBookingResult =
       };
       shop: ShopContext["shop"];
       serviceName: string;
+      vehicleTypeLabel: string;
     }
   | { ok: false; reason: "shop_not_found" | "service_unavailable" | "slot_unavailable" };
 
@@ -81,9 +82,10 @@ export async function createBookingRequest(
   const ctx = await loadShopContext(db, req.slug);
   if (!ctx) return { ok: false, reason: "shop_not_found" };
 
-  const found = findOffer(ctx, req.serviceId, req.vehicleType);
+  const found = findOffer(ctx, req.serviceId, req.vehicleTypeId);
   if (!found) return { ok: false, reason: "service_unavailable" };
   const { service, offer } = found;
+  const vehicleTypeLabel = ctx.vehicleTypes.find((vt) => vt.id === req.vehicleTypeId)?.label ?? "";
 
   const tz = ctx.settings.timezone;
   const startsAt = new Date(req.startsAt);
@@ -146,7 +148,7 @@ export async function createBookingRequest(
         } else {
           const [created] = await tx
             .insert(vehicles)
-            .values({ shopId: ctx.shop.id, customerId: customer.id, label: req.vehicleLabel, vehicleType: req.vehicleType })
+            .values({ shopId: ctx.shop.id, customerId: customer.id, label: req.vehicleLabel, vehicleTypeId: req.vehicleTypeId })
             .returning({ id: vehicles.id });
           vehicleId = created?.id ?? null;
         }
@@ -164,7 +166,7 @@ export async function createBookingRequest(
                 customerId: customer.id,
                 vehicleId,
                 serviceId: service.id,
-                vehicleType: req.vehicleType,
+                vehicleTypeId: req.vehicleTypeId,
                 priceRsd: offer.priceRsd,
                 durationMin: offer.durationMin,
                 startsAt: slot.startsAt,
@@ -195,6 +197,7 @@ export async function createBookingRequest(
             },
             shop: ctx.shop,
             serviceName: service.name,
+            vehicleTypeLabel,
           };
         } catch (err) {
           const code = pgErrorCode(err);

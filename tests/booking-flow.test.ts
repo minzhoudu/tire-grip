@@ -10,8 +10,8 @@ import {
 
 const run = (...events: FlowEvent[]): FlowState => events.reduce(flowReducer, initialFlow);
 
-const swap: FlowEvent = { type: "chooseService", serviceId: "svc-swap", vehicleTypes: ["car", "suv", "van"] };
-const car: FlowEvent = { type: "chooseVehicle", vehicleType: "car" };
+const swap: FlowEvent = { type: "chooseService", serviceId: "svc-swap", vehicleTypeIds: ["car", "suv", "van"] };
+const car: FlowEvent = { type: "chooseVehicle", vehicleTypeId: "car" };
 const friday: FlowEvent = { type: "chooseDay", date: "2026-10-23" };
 const slot: FlowEvent = { type: "chooseSlot", time: "08:30", startsAt: "2026-10-23T06:30:00.000Z" };
 
@@ -26,7 +26,7 @@ describe("happy path", () => {
       ...initialFlow,
       step: "details",
       serviceId: "svc-swap",
-      vehicleType: "car",
+      vehicleTypeId: "car",
       date: "2026-10-23",
       slot: { time: "08:30", startsAt: "2026-10-23T06:30:00.000Z" },
     });
@@ -34,14 +34,14 @@ describe("happy path", () => {
   });
 
   it("skips the vehicle question when the service has a single price", () => {
-    const s = run({ type: "chooseService", serviceId: "svc-repair", vehicleTypes: ["car"] });
+    const s = run({ type: "chooseService", serviceId: "svc-repair", vehicleTypeIds: ["car"] });
     expect(s.step).toBe("day");
-    expect(s.vehicleType).toBe("car");
+    expect(s.vehicleTypeId).toBe("car");
     expect(s.vehicleAuto).toBe(true);
   });
 
   it("a service that can't be booked online stays on the service step with a notice", () => {
-    const s = run({ type: "chooseService", serviceId: "svc-storage", vehicleTypes: [] });
+    const s = run({ type: "chooseService", serviceId: "svc-storage", vehicleTypeIds: [] });
     expect(s.step).toBe("service");
     expect(s.serviceId).toBeNull();
     expect(s.notice).toBe(NOT_BOOKABLE_NOTICE);
@@ -56,14 +56,14 @@ describe("happy path", () => {
 describe("going back", () => {
   it("each step goes back one and clears that answer", () => {
     expect(run(swap, car, friday, slot, { type: "back" })).toMatchObject({ step: "time", slot: null, date: "2026-10-23" });
-    expect(run(swap, car, friday, { type: "back" })).toMatchObject({ step: "day", date: null, vehicleType: "car" });
-    expect(run(swap, car, { type: "back" })).toMatchObject({ step: "vehicle", vehicleType: null });
+    expect(run(swap, car, friday, { type: "back" })).toMatchObject({ step: "day", date: null, vehicleTypeId: "car" });
+    expect(run(swap, car, { type: "back" })).toMatchObject({ step: "vehicle", vehicleTypeId: null });
     expect(run(swap, { type: "back" })).toMatchObject({ step: "service", serviceId: null });
   });
 
   it("back from day returns to services when the vehicle was automatic", () => {
-    const s = run({ type: "chooseService", serviceId: "svc-repair", vehicleTypes: ["car"] }, { type: "back" });
-    expect(s).toMatchObject({ step: "service", serviceId: null, vehicleType: null, vehicleAuto: false });
+    const s = run({ type: "chooseService", serviceId: "svc-repair", vehicleTypeIds: ["car"] }, { type: "back" });
+    expect(s).toMatchObject({ step: "service", serviceId: null, vehicleTypeId: null, vehicleAuto: false });
   });
 
   it("back does nothing on the first and last step", () => {
@@ -79,7 +79,7 @@ describe("guards against stale or double taps", () => {
     expect(flowReducer(atVehicle, friday)).toBe(atVehicle);
     expect(flowReducer(atVehicle, slot)).toBe(atVehicle);
     expect(flowReducer(atVehicle, { type: "submitted" })).toBe(atVehicle);
-    expect(flowReducer(atVehicle, { type: "chooseService", serviceId: "other", vehicleTypes: ["car"] })).toBe(atVehicle);
+    expect(flowReducer(atVehicle, { type: "chooseService", serviceId: "other", vehicleTypeIds: ["car"] })).toBe(atVehicle);
     expect(flowReducer(atVehicle, { type: "showPrices" })).toBe(atVehicle);
   });
 

@@ -4,7 +4,7 @@ import { bookingRequestSchema, fieldErrors } from "../src/lib/booking/request.ts
 const valid = {
   slug: "brzi-tocak",
   serviceId: "5b0a1c4e-8f1d-4d3a-9c2b-7e6f5a4b3c2d",
-  vehicleType: "car",
+  vehicleTypeId: "c1d2e3f4-8f1d-4d3a-9c2b-7e6f5a4b3c2d",
   startsAt: "2026-10-23T06:30:00.000Z",
   name: "  Marko  ",
   phone: "064 123 4567",
@@ -31,7 +31,7 @@ describe("bookingRequestSchema", () => {
 
   it("rejects tampered ids, vehicle types and dates", () => {
     expect(bookingRequestSchema.safeParse({ ...valid, serviceId: "1; drop table" }).success).toBe(false);
-    expect(bookingRequestSchema.safeParse({ ...valid, vehicleType: "truck" }).success).toBe(false);
+    expect(bookingRequestSchema.safeParse({ ...valid, vehicleTypeId: "truck" }).success).toBe(false);
     expect(bookingRequestSchema.safeParse({ ...valid, startsAt: "sutra" }).success).toBe(false);
     expect(bookingRequestSchema.safeParse({ ...valid, note: "x".repeat(301) }).success).toBe(false);
   });

@@ -10,7 +10,7 @@ import "dotenv/config";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
-import { bookings, customers, servicePrices, services, shops, vehicles, workingHours } from "../src/db/schema.ts";
+import { bookings, customers, servicePrices, services, shops, vehicleTypes, vehicles, workingHours } from "../src/db/schema.ts";
 import { addDays, shopToday, zonedToUtc } from "../src/lib/availability/index.ts";
 import { bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { pgErrorCode, createBookingRequest } from "../src/server/bookings.ts";
@@ -20,6 +20,10 @@ const slug = `it-${Date.now().toString(36)}`;
 let shopId = "";
 let swapId = "";
 let storageId = "";
+let carTypeId = "";
+let suvTypeId = "";
+/** Syntactically valid, but no service in this shop has a price for it — exercises "service_unavailable". */
+const unknownTypeId = "00000000-0000-4000-8000-000000000099";
 
 // Two days ahead: always inside the horizon and never "too soon".
 const date = addDays(shopToday({ timezone: TZ }, new Date()), 2);
@@ -29,7 +33,7 @@ const request = (over: Record<string, unknown> = {}) =>
   bookingRequestSchema.parse({
     slug,
     serviceId: swapId,
-    vehicleType: "car",
+    vehicleTypeId: carTypeId,
     startsAt: at(10),
     name: "Marko",
     phone: "064 100 0001",
@@ -56,10 +60,19 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
       .returning();
     swapId = swap!.id;
     storageId = storage!.id;
+    const [car, suvType] = await db
+      .insert(vehicleTypes)
+      .values([
+        { shopId, label: "Putničko", icon: "🚗" },
+        { shopId, label: "SUV / džip", icon: "🚙" },
+      ])
+      .returning();
+    carTypeId = car!.id;
+    suvTypeId = suvType!.id;
     await db.insert(servicePrices).values([
-      { shopId, serviceId: swapId, vehicleType: "car", priceRsd: 1500 },
-      { shopId, serviceId: swapId, vehicleType: "suv", priceRsd: 2000, durationMin: 60 },
-      { shopId, serviceId: storageId, vehicleType: "car", priceRsd: 3000 },
+      { shopId, serviceId: swapId, vehicleTypeId: carTypeId, priceRsd: 1500 },
+      { shopId, serviceId: swapId, vehicleTypeId: suvTypeId, priceRsd: 2000, durationMin: 60 },
+      { shopId, serviceId: storageId, vehicleTypeId: carTypeId, priceRsd: 3000 },
     ]);
     await db
       .insert(workingHours)
@@ -134,10 +147,10 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
     // 13:30 is fully booked → a 60-minute booking at 13:00 can't fit
     await createBookingRequest(db, request({ phone: "064 300 0001", startsAt: at(13, 30) }));
     await createBookingRequest(db, request({ phone: "064 300 0002", startsAt: at(13, 30) }));
-    const suv = await createBookingRequest(db, request({ phone: "064 300 0003", vehicleType: "suv", startsAt: at(13) }));
+    const suv = await createBookingRequest(db, request({ phone: "064 300 0003", vehicleTypeId: suvTypeId, startsAt: at(13) }));
     expect(suv).toEqual({ ok: false, reason: "slot_unavailable" });
 
-    const ok = await createBookingRequest(db, request({ phone: "064 300 0003", vehicleType: "suv", startsAt: at(14) }));
+    const ok = await createBookingRequest(db, request({ phone: "064 300 0003", vehicleTypeId: suvTypeId, startsAt: at(14) }));
     expect(ok.ok && ok.booking.durationMin).toBe(60);
     expect(ok.ok && ok.booking.endsAt.toISOString()).toBe(at(15));
   });
@@ -175,7 +188,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
   it("rejects services that can't be booked and unknown shops", async () => {
     const db = getDb();
     expect(await createBookingRequest(db, request({ serviceId: storageId }))).toEqual({ ok: false, reason: "service_unavailable" });
-    expect(await createBookingRequest(db, request({ vehicleType: "van" }))).toEqual({ ok: false, reason: "service_unavailable" });
+    expect(await createBookingRequest(db, request({ vehicleTypeId: unknownTypeId }))).toEqual({ ok: false, reason: "service_unavailable" });
     expect(await createBookingRequest(db, request({ slug: "ne-postoji" }))).toEqual({ ok: false, reason: "shop_not_found" });
   });
 

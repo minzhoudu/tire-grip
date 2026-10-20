@@ -5,12 +5,10 @@
 import { z } from "zod";
 import { normalizePhone } from "../phone.ts";
 
-export const vehicleTypes = ["car", "suv", "van"] as const;
-
 export const bookingRequestSchema = z.object({
   slug: z.string().min(1).max(80),
   serviceId: z.uuid(),
-  vehicleType: z.enum(vehicleTypes),
+  vehicleTypeId: z.uuid(),
   /** ISO instant of the chosen slot, as returned by the availability action */
   startsAt: z.iso.datetime(),
   name: z.string().trim().min(2, "Unesite ime").max(60, "Ime je predugačko"),

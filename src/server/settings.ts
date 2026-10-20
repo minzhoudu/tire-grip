@@ -12,6 +12,7 @@ import {
   servicePrices,
   services,
   shops,
+  vehicleTypes,
   workingHours,
   type ScheduleException,
   type Shop,
@@ -201,7 +202,7 @@ export async function deleteException(db: DB, shopId: string, id: string): Promi
 /* ----------------------------------------------------------------- services & prices */
 
 export interface ServicePriceRow {
-  vehicleType: VehicleType;
+  vehicleTypeId: VehicleType;
   priceRsd: number;
   durationMin: number | null;
 }
@@ -245,7 +246,7 @@ export async function listServicesForSettings(db: DB, shopId: string): Promise<S
     hasBookings: (bookingCountByService.get(s.id) ?? 0) > 0,
     prices: priceRows
       .filter((p) => p.serviceId === s.id)
-      .map((p) => ({ vehicleType: p.vehicleType, priceRsd: p.priceRsd, durationMin: p.durationMin })),
+      .map((p) => ({ vehicleTypeId: p.vehicleTypeId, priceRsd: p.priceRsd, durationMin: p.durationMin })),
   }));
 }
 
@@ -277,7 +278,7 @@ export async function createService(db: DB, shopId: string, input: ServiceInput)
       .returning({ id: services.id });
     const id = row!.id;
     if (input.prices.length > 0) {
-      await tx.insert(servicePrices).values(input.prices.map((p) => ({ shopId, serviceId: id, vehicleType: p.vehicleType, priceRsd: p.priceRsd, durationMin: p.durationMin })));
+      await tx.insert(servicePrices).values(input.prices.map((p) => ({ shopId, serviceId: id, vehicleTypeId: p.vehicleTypeId, priceRsd: p.priceRsd, durationMin: p.durationMin })));
     }
     return id;
   });
@@ -300,7 +301,7 @@ export async function updateService(db: DB, shopId: string, serviceId: string, i
     if (updated.length === 0) return false;
     await tx.delete(servicePrices).where(and(eq(servicePrices.shopId, shopId), eq(servicePrices.serviceId, serviceId)));
     if (input.prices.length > 0) {
-      await tx.insert(servicePrices).values(input.prices.map((p) => ({ shopId, serviceId, vehicleType: p.vehicleType, priceRsd: p.priceRsd, durationMin: p.durationMin })));
+      await tx.insert(servicePrices).values(input.prices.map((p) => ({ shopId, serviceId, vehicleTypeId: p.vehicleTypeId, priceRsd: p.priceRsd, durationMin: p.durationMin })));
     }
     return true;
   });
@@ -347,6 +348,100 @@ export async function moveService(db: DB, shopId: string, serviceId: string, dir
   });
 }
 
+/* ----------------------------------------------------------------- vehicle types */
+
+export interface VehicleTypeWithUsage {
+  id: string;
+  label: string;
+  icon: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  hasBookings: boolean;
+}
+
+export async function listVehicleTypesForSettings(db: DB, shopId: string): Promise<VehicleTypeWithUsage[]> {
+  const [rows, bookingCounts] = await Promise.all([
+    db.select().from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId)).orderBy(asc(vehicleTypes.sortOrder)),
+    db
+      .select({ vehicleTypeId: bookings.vehicleTypeId, n: sql<number>`count(*)::int` })
+      .from(bookings)
+      .where(eq(bookings.shopId, shopId))
+      .groupBy(bookings.vehicleTypeId),
+  ]);
+  const bookingCountByType = new Map(bookingCounts.map((r) => [r.vehicleTypeId, r.n]));
+
+  return rows.map((vt) => ({
+    id: vt.id,
+    label: vt.label,
+    icon: vt.icon,
+    isActive: vt.isActive,
+    sortOrder: vt.sortOrder,
+    hasBookings: (bookingCountByType.get(vt.id) ?? 0) > 0,
+  }));
+}
+
+export interface VehicleTypeInput {
+  label: string;
+  icon: string | null;
+}
+
+export async function createVehicleType(db: DB, shopId: string, input: VehicleTypeInput): Promise<string> {
+  return db.transaction(async (tx) => {
+    const [maxRow] = await tx.select({ max: sql<number>`coalesce(max(${vehicleTypes.sortOrder}), 0)` }).from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId));
+    const [row] = await tx
+      .insert(vehicleTypes)
+      .values({ shopId, label: input.label, icon: input.icon, sortOrder: (maxRow?.max ?? 0) + 1 })
+      .returning({ id: vehicleTypes.id });
+    return row!.id;
+  });
+}
+
+export async function updateVehicleType(db: DB, shopId: string, vehicleTypeId: string, input: VehicleTypeInput): Promise<boolean> {
+  const updated = await db
+    .update(vehicleTypes)
+    .set({ label: input.label, icon: input.icon })
+    .where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.id, vehicleTypeId)))
+    .returning({ id: vehicleTypes.id });
+  return updated.length > 0;
+}
+
+export async function setVehicleTypeActive(db: DB, shopId: string, vehicleTypeId: string, isActive: boolean): Promise<boolean> {
+  const rows = await db
+    .update(vehicleTypes)
+    .set({ isActive })
+    .where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.id, vehicleTypeId)))
+    .returning({ id: vehicleTypes.id });
+  return rows.length > 0;
+}
+
+export type DeleteVehicleTypeResult = { ok: true } | { ok: false; reason: "has_bookings" | "not_found" };
+
+/** A vehicle type that was ever booked can't be deleted (the booking FK would be orphaned) — deactivate it instead. */
+export async function deleteVehicleType(db: DB, shopId: string, vehicleTypeId: string): Promise<DeleteVehicleTypeResult> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(bookings)
+    .where(and(eq(bookings.shopId, shopId), eq(bookings.vehicleTypeId, vehicleTypeId)));
+  if ((row?.n ?? 0) > 0) return { ok: false, reason: "has_bookings" };
+  const deleted = await db.delete(vehicleTypes).where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.id, vehicleTypeId))).returning({ id: vehicleTypes.id });
+  return deleted.length > 0 ? { ok: true } : { ok: false, reason: "not_found" };
+}
+
+/** Swaps sort_order with the previous/next vehicle type, for simple reordering (no drag-and-drop). */
+export async function moveVehicleType(db: DB, shopId: string, vehicleTypeId: string, direction: "up" | "down"): Promise<void> {
+  const rows = await db.select({ id: vehicleTypes.id, sortOrder: vehicleTypes.sortOrder }).from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId)).orderBy(asc(vehicleTypes.sortOrder));
+  const idx = rows.findIndex((r) => r.id === vehicleTypeId);
+  if (idx === -1) return;
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= rows.length) return;
+  const a = rows[idx]!;
+  const b = rows[swapIdx]!;
+  await db.transaction(async (tx) => {
+    await tx.update(vehicleTypes).set({ sortOrder: b.sortOrder }).where(eq(vehicleTypes.id, a.id));
+    await tx.update(vehicleTypes).set({ sortOrder: a.sortOrder }).where(eq(vehicleTypes.id, b.id));
+  });
+}
+
 /* ----------------------------------------------------------------- hub summary */
 
 export interface SettingsSection {
@@ -358,13 +453,15 @@ export interface SettingsSection {
 
 /** The 5 settings categories with their live one-line summaries — shared by the mobile hub list and the desktop sidebar. */
 export async function listSettingsSections(db: DB, shop: Shop): Promise<SettingsSection[]> {
-  const [weeklyHours, exceptions, services] = await Promise.all([
+  const [weeklyHours, exceptions, services, vehicleTypesList] = await Promise.all([
     listWorkingHours(db, shop.id),
     listExceptions(db, shop.id),
     listServicesForSettings(db, shop.id),
+    listVehicleTypesForSettings(db, shop.id),
   ]);
   const openDays = new Set(weeklyHours.map((h) => h.weekday)).size;
   const activeServices = services.filter((s) => s.isActive).length;
+  const activeVehicleTypes = vehicleTypesList.filter((vt) => vt.isActive).length;
   const base = `/admin/${shop.slug}/podesavanja`;
 
   return [
@@ -397,6 +494,12 @@ export async function listSettingsSections(db: DB, shop: Shop): Promise<Settings
       icon: "🛞",
       title: "Usluge i cene",
       subtitle: `${activeServices}/${services.length} aktivno`,
+    },
+    {
+      href: `${base}/vrste-vozila`,
+      icon: "🚗",
+      title: "Vrste vozila",
+      subtitle: `${activeVehicleTypes}/${vehicleTypesList.length} aktivno`,
     },
   ];
 }

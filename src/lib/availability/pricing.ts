@@ -1,5 +1,5 @@
-/** What a service costs and how long it takes for a given vehicle type. */
-export type VehicleType = "car" | "suv" | "van";
+/** What a service costs and how long it takes for a given vehicle type. A vehicle type is a shop-owned row (its id), not a fixed set. */
+export type VehicleType = string;
 
 export interface ServiceLike {
   durationMin: number;
@@ -8,7 +8,7 @@ export interface ServiceLike {
 }
 
 export interface ServicePriceLike {
-  vehicleType: VehicleType;
+  vehicleTypeId: VehicleType;
   priceRsd: number;
   durationMin: number | null;
 }
@@ -23,9 +23,9 @@ export interface Offer {
  * doesn't offer it (inactive, info-only, or no price row for that vehicle).
  * A price row's duration overrides the service default (SUV takes longer).
  */
-export function resolveOffer(service: ServiceLike, prices: ServicePriceLike[], vehicleType: VehicleType): Offer | null {
+export function resolveOffer(service: ServiceLike, prices: ServicePriceLike[], vehicleTypeId: VehicleType): Offer | null {
   if (!service.isActive || !service.bookable) return null;
-  const row = prices.find((p) => p.vehicleType === vehicleType);
+  const row = prices.find((p) => p.vehicleTypeId === vehicleTypeId);
   if (!row) return null;
   return { priceRsd: row.priceRsd, durationMin: row.durationMin ?? service.durationMin };
 }

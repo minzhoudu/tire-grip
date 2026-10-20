@@ -15,7 +15,7 @@ export type Step = "service" | "vehicle" | "day" | "time" | "details" | "done";
 export interface FlowState {
   step: Step;
   serviceId: string | null;
-  vehicleType: VehicleType | null;
+  vehicleTypeId: VehicleType | null;
   /** Vehicle was picked automatically because the service has a single price */
   vehicleAuto: boolean;
   date: string | null;
@@ -27,9 +27,9 @@ export interface FlowState {
 }
 
 export type FlowEvent =
-  | { type: "chooseService"; serviceId: string; vehicleTypes: VehicleType[] }
+  | { type: "chooseService"; serviceId: string; vehicleTypeIds: VehicleType[] }
   | { type: "showPrices" }
-  | { type: "chooseVehicle"; vehicleType: VehicleType }
+  | { type: "chooseVehicle"; vehicleTypeId: VehicleType }
   | { type: "chooseDay"; date: string }
   | { type: "chooseSlot"; time: string; startsAt: string }
   | { type: "back" }
@@ -40,7 +40,7 @@ export type FlowEvent =
 export const initialFlow: FlowState = {
   step: "service",
   serviceId: null,
-  vehicleType: null,
+  vehicleTypeId: null,
   vehicleAuto: false,
   date: null,
   slot: null,
@@ -63,12 +63,12 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
 
     case "chooseService": {
       if (state.step !== "service") return state;
-      if (event.vehicleTypes.length === 0) return { ...s, notice: NOT_BOOKABLE_NOTICE };
-      const auto = event.vehicleTypes.length === 1;
+      if (event.vehicleTypeIds.length === 0) return { ...s, notice: NOT_BOOKABLE_NOTICE };
+      const auto = event.vehicleTypeIds.length === 1;
       return {
         ...s,
         serviceId: event.serviceId,
-        vehicleType: auto ? event.vehicleTypes[0]! : null,
+        vehicleTypeId: auto ? event.vehicleTypeIds[0]! : null,
         vehicleAuto: auto,
         step: auto ? "day" : "vehicle",
         date: null,
@@ -77,7 +77,7 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
     }
 
     case "chooseVehicle":
-      return state.step === "vehicle" ? { ...s, vehicleType: event.vehicleType, step: "day" } : state;
+      return state.step === "vehicle" ? { ...s, vehicleTypeId: event.vehicleTypeId, step: "day" } : state;
 
     case "chooseDay":
       return state.step === "day" ? { ...s, date: event.date, step: "time" } : state;
@@ -97,8 +97,8 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
           return { ...s, step: "service", serviceId: null };
         case "day":
           return state.vehicleAuto
-            ? { ...s, step: "service", serviceId: null, vehicleType: null, vehicleAuto: false }
-            : { ...s, step: "vehicle", vehicleType: null };
+            ? { ...s, step: "service", serviceId: null, vehicleTypeId: null, vehicleAuto: false }
+            : { ...s, step: "vehicle", vehicleTypeId: null };
         case "time":
           return { ...s, step: "day", date: null };
         case "details":

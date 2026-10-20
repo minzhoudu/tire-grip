@@ -5,7 +5,7 @@
  */
 import { and, asc, desc, eq, gte, gt, inArray, lt, or, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
-import { blockedTimes, bookings, customers, services, vehicles } from "../db/schema.ts";
+import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } from "../db/schema.ts";
 import { addDays, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
 import { ACTIONS, FINAL_STATUSES, allowedActions, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
 import { ADMIN_HORIZON_DAYS } from "./bookings.ts";
@@ -22,7 +22,8 @@ export interface AdminBooking {
   bay: number;
   priceRsd: number;
   durationMin: number;
-  vehicleType: "car" | "suv" | "van";
+  vehicleTypeLabel: string;
+  vehicleTypeIcon: string | null;
   serviceName: string;
   serviceIcon: string | null;
   customerName: string;
@@ -42,7 +43,8 @@ const bookingColumns = {
   bay: bookings.bay,
   priceRsd: bookings.priceRsd,
   durationMin: bookings.durationMin,
-  vehicleType: bookings.vehicleType,
+  vehicleTypeLabel: vehicleTypes.label,
+  vehicleTypeIcon: vehicleTypes.icon,
   serviceName: services.name,
   serviceIcon: services.icon,
   customerName: customers.name,
@@ -59,6 +61,7 @@ function bookingQuery(db: DB) {
     .from(bookings)
     .innerJoin(services, and(eq(services.id, bookings.serviceId), eq(services.shopId, bookings.shopId)))
     .innerJoin(customers, and(eq(customers.id, bookings.customerId), eq(customers.shopId, bookings.shopId)))
+    .innerJoin(vehicleTypes, and(eq(vehicleTypes.id, bookings.vehicleTypeId), eq(vehicleTypes.shopId, bookings.shopId)))
     .leftJoin(vehicles, and(eq(vehicles.id, bookings.vehicleId), eq(vehicles.shopId, bookings.shopId)));
 }
 
@@ -154,8 +157,8 @@ export async function changeBookingStatus(
 /* ------------------------------------------------------------ manual booking slots */
 
 /** Slots for the shop's own entry form: no minimum notice, long horizon. */
-export async function adminDaySlots(db: DB, ctx: ShopContext, serviceId: string, vehicleType: "car" | "suv" | "van", date: string, now = new Date()) {
-  const found = findOffer(ctx, serviceId, vehicleType);
+export async function adminDaySlots(db: DB, ctx: ShopContext, serviceId: string, vehicleTypeId: string, date: string, now = new Date()) {
+  const found = findOffer(ctx, serviceId, vehicleTypeId);
   if (!found) return null;
   const tz = ctx.settings.timezone;
   const busy = await loadBusy(db, ctx.shop.id, zonedToUtc(date, 0, tz), zonedToUtc(addDays(date, 1), 0, tz));

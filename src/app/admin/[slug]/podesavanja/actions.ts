@@ -7,22 +7,28 @@
  */
 import { z } from "zod";
 import { getDb } from "@/db";
-import { serviceKind, vehicleType as vehicleTypeEnum } from "@/db/schema";
+import { serviceKind } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
 import { requireOwnerAccess } from "@/server/session";
 import {
   createService,
+  createVehicleType,
   deleteException,
   deleteService,
+  deleteVehicleType,
   moveService,
+  moveVehicleType,
   setServiceActive,
+  setVehicleTypeActive,
   updateBookingRules,
   updateService,
   updateShopInfo,
+  updateVehicleType,
   updateWorkingHours,
   upsertException,
   type AffectedBooking,
   type ServiceInput,
+  type VehicleTypeInput,
 } from "@/server/settings";
 
 const slugSchema = z.string().min(1).max(80);
@@ -159,7 +165,7 @@ export async function deleteExceptionAction(raw: { slug: string; id: string }): 
 /* ------------------------------------------------------------------ services & prices */
 
 const priceInput = z.object({
-  vehicleType: z.enum(vehicleTypeEnum.enumValues),
+  vehicleTypeId: z.uuid(),
   priceRsd: z.number().int().min(0),
   durationMin: z.number().int().min(5).max(480).nullable(),
 });
@@ -174,8 +180,8 @@ const serviceInput = z.object({
   bookable: z.boolean(),
   prices: z
     .array(priceInput)
-    .max(3)
-    .refine((p) => new Set(p.map((x) => x.vehicleType)).size === p.length, "Po jedna cena za svaki tip vozila."),
+    .max(50)
+    .refine((p) => new Set(p.map((x) => x.vehicleTypeId)).size === p.length, "Po jedna cena za svaki tip vozila."),
 });
 
 export type ServiceResult = { ok: true } | { ok: false; error: string };
@@ -231,5 +237,61 @@ export async function moveServiceAction(raw: { slug: string; serviceId: string; 
   if (!input.success) return { ok: false };
   const { shop } = await requireOwnerAccess(input.data.slug);
   await moveService(getDb(), shop.id, input.data.serviceId, input.data.direction);
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------ vehicle types */
+
+const vehicleTypeInput = z.object({
+  slug: slugSchema,
+  label: z.string().trim().min(1, "Unesite naziv").max(60),
+  icon: z.string().trim().max(8).optional().default(""),
+});
+
+export type VehicleTypeResult = { ok: true } | { ok: false; error: string };
+
+function toVehicleTypeInput(data: z.output<typeof vehicleTypeInput>): VehicleTypeInput {
+  return { label: data.label, icon: data.icon || null };
+}
+
+export async function createVehicleTypeAction(raw: z.input<typeof vehicleTypeInput>): Promise<VehicleTypeResult> {
+  const input = vehicleTypeInput.safeParse(raw);
+  if (!input.success) return { ok: false, error: input.error.issues[0]?.message ?? "Proverite unete podatke." };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  await createVehicleType(getDb(), shop.id, toVehicleTypeInput(input.data));
+  return { ok: true };
+}
+
+export async function updateVehicleTypeAction(raw: z.input<typeof vehicleTypeInput> & { vehicleTypeId: string }): Promise<VehicleTypeResult> {
+  const { vehicleTypeId, ...rest } = raw;
+  const input = vehicleTypeInput.safeParse(rest);
+  const idCheck = z.uuid().safeParse(vehicleTypeId);
+  if (!input.success || !idCheck.success) return { ok: false, error: input.success ? "Neispravna vrsta vozila." : input.error.issues[0]?.message ?? "" };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  const ok = await updateVehicleType(getDb(), shop.id, idCheck.data, toVehicleTypeInput(input.data));
+  return ok ? { ok: true } : { ok: false, error: "Vrsta vozila nije pronađena." };
+}
+
+export async function setVehicleTypeActiveAction(raw: { slug: string; vehicleTypeId: string; isActive: boolean }): Promise<{ ok: boolean }> {
+  const input = z.object({ slug: slugSchema, vehicleTypeId: z.uuid(), isActive: z.boolean() }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  return { ok: await setVehicleTypeActive(getDb(), shop.id, input.data.vehicleTypeId, input.data.isActive) };
+}
+
+export type DeleteVehicleTypeActionResult = { ok: true } | { ok: false; reason: "has_bookings" | "not_found" | "invalid" };
+
+export async function deleteVehicleTypeAction(raw: { slug: string; vehicleTypeId: string }): Promise<DeleteVehicleTypeActionResult> {
+  const input = z.object({ slug: slugSchema, vehicleTypeId: z.uuid() }).safeParse(raw);
+  if (!input.success) return { ok: false, reason: "invalid" };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  return deleteVehicleType(getDb(), shop.id, input.data.vehicleTypeId);
+}
+
+export async function moveVehicleTypeAction(raw: { slug: string; vehicleTypeId: string; direction: "up" | "down" }): Promise<{ ok: boolean }> {
+  const input = z.object({ slug: slugSchema, vehicleTypeId: z.uuid(), direction: z.enum(["up", "down"]) }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  await moveVehicleType(getDb(), shop.id, input.data.vehicleTypeId, input.data.direction);
   return { ok: true };
 }

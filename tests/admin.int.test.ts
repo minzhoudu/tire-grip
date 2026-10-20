@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import { isAPIError } from "better-auth/api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
-import { bookings, servicePrices, services, shops, users, workingHours } from "../src/db/schema.ts";
+import { bookings, servicePrices, services, shops, users, vehicleTypes, workingHours } from "../src/db/schema.ts";
 import { addDays, shopToday, zonedToUtc } from "../src/lib/availability/index.ts";
 import { bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { createShopUser, listUserShops } from "../src/server/accounts.ts";
@@ -36,6 +36,7 @@ const password = "dovoljno-duga-lozinka";
 let shopId = "";
 let otherShopId = "";
 let swapId = "";
+let carTypeId = "";
 
 const date = addDays(shopToday({ timezone: TZ }, new Date()), 2);
 const farDate = addDays(shopToday({ timezone: TZ }, new Date()), 30); // beyond the 14-day public horizon
@@ -45,7 +46,7 @@ const request = (over: Record<string, unknown> = {}) =>
   bookingRequestSchema.parse({
     slug,
     serviceId: swapId,
-    vehicleType: "car",
+    vehicleTypeId: carTypeId,
     startsAt: at(date, 10),
     name: "Marko",
     phone: "064 700 0001",
@@ -57,13 +58,14 @@ async function makeShop(s: string, name: string) {
   const [shop] = await db.insert(shops).values({ slug: s, name, bays: 2, minNoticeMin: 60, bookingHorizonDays: 14 }).returning();
   await db.insert(workingHours).values([1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ shopId: shop!.id, weekday, opensAt: "08:00", closesAt: "17:00" })));
   const [svc] = await db.insert(services).values({ shopId: shop!.id, kind: "seasonal_swap", name: "Zamena guma", durationMin: 30 }).returning();
-  await db.insert(servicePrices).values({ shopId: shop!.id, serviceId: svc!.id, vehicleType: "car", priceRsd: 1500 });
-  return { shopId: shop!.id, serviceId: svc!.id };
+  const [car] = await db.insert(vehicleTypes).values({ shopId: shop!.id, label: "Putničko", icon: "🚗" }).returning();
+  await db.insert(servicePrices).values({ shopId: shop!.id, serviceId: svc!.id, vehicleTypeId: car!.id, priceRsd: 1500 });
+  return { shopId: shop!.id, serviceId: svc!.id, carTypeId: car!.id };
 }
 
 describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
   beforeAll(async () => {
-    ({ shopId, serviceId: swapId } = await makeShop(slug, "IT admin radnja"));
+    ({ shopId, serviceId: swapId, carTypeId } = await makeShop(slug, "IT admin radnja"));
     ({ shopId: otherShopId } = await makeShop(otherSlug, "Druga radnja"));
   });
 
@@ -194,7 +196,7 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
     if (!block.ok) return;
 
     const ctx = (await loadShopContext(db, slug))!;
-    const day = (await adminDaySlots(db, ctx, swapId, "car", date))!;
+    const day = (await adminDaySlots(db, ctx, swapId, carTypeId, date))!;
     const taken = day.slots.filter((s) => !s.available).map((s) => s.time);
     expect(taken).toContain("12:00");
     expect(taken).toContain("12:30");
@@ -208,7 +210,7 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
 
     expect(await deleteBlock(db, otherShopId, block.id)).toBe(false);
     expect(await deleteBlock(db, shopId, block.id)).toBe(true);
-    const after = (await adminDaySlots(db, ctx, swapId, "car", date))!;
+    const after = (await adminDaySlots(db, ctx, swapId, carTypeId, date))!;
     expect(after.slots.find((s) => s.time === "12:30")!.available).toBe(true);
   });
 });

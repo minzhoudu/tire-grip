@@ -10,12 +10,10 @@ import {
   type SlotOption,
 } from "@/app/[slug]/actions";
 import { formatRsd } from "@/lib/availability/labels";
-import type { VehicleType } from "@/lib/availability/pricing";
 import { flowReducer, initialFlow, type FlowState } from "@/lib/booking/flow";
-import { vehicleTypeIcons, vehicleTypeLabels } from "@/lib/booking/messages";
 import { bookingRequestSchema, fieldErrors } from "@/lib/booking/request";
 import { formatPhone } from "@/lib/phone";
-import type { PublicService } from "@/server/shops";
+import type { PublicService, PublicVehicleType } from "@/server/shops";
 
 export interface ChatShop {
   slug: string;
@@ -26,6 +24,7 @@ export interface ChatShop {
   open: boolean;
   statusText: string;
   services: PublicService[];
+  vehicleTypes: PublicVehicleType[];
 }
 
 type Load<T> = { state: "idle" } | { state: "loading" } | { state: "error" } | { state: "ready"; data: T };
@@ -43,13 +42,15 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
   const endRef = useRef<HTMLDivElement>(null);
 
   const service = shop.services.find((s) => s.id === flow.serviceId) ?? null;
-  const price = service?.prices.find((p) => p.vehicleType === flow.vehicleType) ?? null;
-  const offerKey = flow.serviceId && flow.vehicleType ? { slug: shop.slug, serviceId: flow.serviceId, vehicleType: flow.vehicleType } : null;
+  const price = service?.prices.find((p) => p.vehicleTypeId === flow.vehicleTypeId) ?? null;
+  const offerKey =
+    flow.serviceId && flow.vehicleTypeId ? { slug: shop.slug, serviceId: flow.serviceId, vehicleTypeId: flow.vehicleTypeId } : null;
+  const vehicleTypeById = new Map(shop.vehicleTypes.map((vt) => [vt.id, vt]));
 
   // A fresh service/vehicle choice starts back at the first page of days.
   useEffect(() => {
     setDayOffset(0);
-  }, [flow.serviceId, flow.vehicleType]);
+  }, [flow.serviceId, flow.vehicleTypeId]);
 
   // Load bookable days when entering the "day" step (or paging through them).
   useEffect(() => {
@@ -63,7 +64,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flow.step, flow.serviceId, flow.vehicleType, dayOffset, reloadKey]);
+  }, [flow.step, flow.serviceId, flow.vehicleTypeId, dayOffset, reloadKey]);
 
   // Load slots when entering the "time" step (also after "slot just taken").
   useEffect(() => {
@@ -77,7 +78,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flow.step, flow.date, flow.serviceId, flow.vehicleType, reloadKey]);
+  }, [flow.step, flow.date, flow.serviceId, flow.vehicleTypeId, reloadKey]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -125,7 +126,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
                       dispatch({
                         type: "chooseService",
                         serviceId: s.id,
-                        vehicleTypes: s.bookable ? s.prices.map((p) => p.vehicleType) : [],
+                        vehicleTypeIds: s.bookable ? s.prices.map((p) => p.vehicleTypeId) : [],
                       })
                     }
                   >
@@ -142,7 +143,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
 
         {flow.showPrices && (
           <Bot>
-            <PriceList services={shop.services} />
+            <PriceList services={shop.services} vehicleTypes={shop.vehicleTypes} />
           </Bot>
         )}
 
@@ -160,8 +161,8 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
                 {flow.step === "vehicle" && (
                   <Chips>
                     {service.prices.map((p) => (
-                      <Chip key={p.vehicleType} onClick={() => dispatch({ type: "chooseVehicle", vehicleType: p.vehicleType })}>
-                        {vehicleTypeIcons[p.vehicleType]} {vehicleTypeLabels[p.vehicleType]}
+                      <Chip key={p.vehicleTypeId} onClick={() => dispatch({ type: "chooseVehicle", vehicleTypeId: p.vehicleTypeId })}>
+                        {vehicleTypeById.get(p.vehicleTypeId)?.icon} {vehicleTypeById.get(p.vehicleTypeId)?.label}
                       </Chip>
                     ))}
                     <BackChip onClick={() => dispatch({ type: "back" })} />
@@ -170,13 +171,13 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
               </Bot>
             )}
 
-            {flow.vehicleType && !flow.vehicleAuto && (
+            {flow.vehicleTypeId && !flow.vehicleAuto && (
               <User>
-                {vehicleTypeIcons[flow.vehicleType]} {vehicleTypeLabels[flow.vehicleType]}
+                {vehicleTypeById.get(flow.vehicleTypeId)?.icon} {vehicleTypeById.get(flow.vehicleTypeId)?.label}
               </User>
             )}
 
-            {flow.vehicleType && price && (
+            {flow.vehicleTypeId && price && (
               <Bot>
                 <p>
                   Cena: <strong className="font-mono text-rust-600">{formatRsd(price.priceRsd)}</strong>, oko {price.durationMin ?? service.durationMin} minuta.
@@ -225,7 +226,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
                 flow={flow}
                 summary={{
                   service: `${service.icon ?? ""} ${service.name}`.trim(),
-                  vehicle: flow.vehicleType ? vehicleTypeLabels[flow.vehicleType] : "",
+                  vehicle: flow.vehicleTypeId ? vehicleTypeById.get(flow.vehicleTypeId)?.label ?? "" : "",
                   when: `${slots.state === "ready" ? slots.data.dayLabel : flow.date} u ${flow.slot.time}h`,
                   price: price ? formatRsd(price.priceRsd) : "",
                 }}
@@ -531,9 +532,8 @@ function SlotPicker({
   );
 }
 
-function PriceList({ services }: { services: PublicService[] }) {
-  const types: VehicleType[] = ["car", "suv", "van"];
-  const used = types.filter((t) => services.some((s) => s.prices.some((p) => p.vehicleType === t)));
+function PriceList({ services, vehicleTypes }: { services: PublicService[]; vehicleTypes: PublicVehicleType[] }) {
+  const used = vehicleTypes.filter((vt) => services.some((s) => s.prices.some((p) => p.vehicleTypeId === vt.id)));
   return (
     <div>
       <p className="font-semibold">💰 Cenovnik</p>
@@ -541,9 +541,9 @@ function PriceList({ services }: { services: PublicService[] }) {
         <thead>
           <tr className="text-left text-slate-500">
             <th className="py-1 pr-2 font-medium">Usluga</th>
-            {used.map((t) => (
-              <th key={t} className="py-1 pl-2 text-right font-medium" title={vehicleTypeLabels[t]}>
-                {vehicleTypeIcons[t]}
+            {used.map((vt) => (
+              <th key={vt.id} className="py-1 pl-2 text-right font-medium" title={vt.label}>
+                {vt.icon}
               </th>
             ))}
           </tr>
@@ -552,10 +552,10 @@ function PriceList({ services }: { services: PublicService[] }) {
           {services.map((s) => (
             <tr key={s.id} className="border-t border-slate-100">
               <td className="py-1.5 pr-2">{s.name}</td>
-              {used.map((t) => {
-                const p = s.prices.find((x) => x.vehicleType === t);
+              {used.map((vt) => {
+                const p = s.prices.find((x) => x.vehicleTypeId === vt.id);
                 return (
-                  <td key={t} className="py-1.5 pl-2 text-right font-mono font-bold whitespace-nowrap tabular-nums text-rust-600">
+                  <td key={vt.id} className="py-1.5 pl-2 text-right font-mono font-bold whitespace-nowrap tabular-nums text-rust-600">
                     {p ? formatRsd(p.priceRsd) : "–"}
                   </td>
                 );
@@ -564,7 +564,7 @@ function PriceList({ services }: { services: PublicService[] }) {
           ))}
         </tbody>
       </table>
-      <p className="mt-2 text-xs text-slate-500">🚗 putničko · 🚙 SUV / džip · 🚐 kombi</p>
+      <p className="mt-2 text-xs text-slate-500">{used.map((vt) => `${vt.icon} ${vt.label}`).join(" · ")}</p>
     </div>
   );
 }
@@ -598,7 +598,7 @@ function DetailsForm({
     const check = bookingRequestSchema.safeParse({
       slug: "x",
       serviceId: flow.serviceId,
-      vehicleType: flow.vehicleType,
+      vehicleTypeId: flow.vehicleTypeId,
       startsAt: flow.slot?.startsAt,
       ...fields,
     });

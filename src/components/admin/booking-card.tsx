@@ -5,7 +5,6 @@ import { useEffect, useState, useTransition } from "react";
 import { changeStatusAction } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
-import { vehicleTypeIcons, vehicleTypeLabels } from "@/lib/booking/messages";
 import { ACTIONS, CUSTOMER_CANCEL_REASON, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
 import { formatPhone, whatsappLink } from "@/lib/phone";
 
@@ -15,7 +14,8 @@ export interface BookingCardData {
   actions: BookingAction[];
   timeRange: string;
   serviceName: string;
-  vehicleType: "car" | "suv" | "van";
+  vehicleTypeLabel: string;
+  vehicleTypeIcon: string | null;
   vehicleLabel: string | null;
   customerName: string;
   customerPhone: string;
@@ -112,7 +112,7 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
         <div>
           <p className="font-mono text-xl font-bold tabular-nums">{b.timeRange}</p>
           <p className="mt-0.5 text-sm text-slate-600">
-            {b.serviceName} · {vehicleTypeIcons[b.vehicleType]} {vehicleTypeLabels[b.vehicleType]}
+            {b.serviceName} · {b.vehicleTypeIcon} {b.vehicleTypeLabel}
             {b.bay !== null && <> · dizalica {b.bay}</>}
           </p>
         </div>

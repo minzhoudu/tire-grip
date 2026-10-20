@@ -7,7 +7,7 @@ import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
-import { bookings, servicePrices, services, shops, workingHours } from "../src/db/schema.ts";
+import { bookings, servicePrices, services, shops, vehicleTypes, workingHours } from "../src/db/schema.ts";
 import { addDays, shopToday, zonedToUtc } from "../src/lib/availability/index.ts";
 import { bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { canSelfCancel, cancelBookingByCustomer, getCancellableBooking } from "../src/server/cancel.ts";
@@ -21,6 +21,7 @@ const run = Date.now().toString(36);
 const slug = `it-cancel-${run}`;
 let shopId = "";
 let serviceId = "";
+let carTypeId = "";
 
 const date = addDays(shopToday({ timezone: TZ }, new Date()), 2);
 const at = (d: string, hh: number, mm = 0) => zonedToUtc(d, hh * 60 + mm, TZ).toISOString();
@@ -29,7 +30,7 @@ const request = (over: Record<string, unknown> = {}) =>
   bookingRequestSchema.parse({
     slug,
     serviceId,
-    vehicleType: "car",
+    vehicleTypeId: carTypeId,
     startsAt: at(date, 10),
     name: "Marko",
     phone: "064 700 9001",
@@ -47,7 +48,9 @@ describe.skipIf(!process.env.DATABASE_URL)("self-service cancel (Postgres)", () 
     await db.insert(workingHours).values([1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ shopId, weekday, opensAt: "08:00", closesAt: "17:00" })));
     const [svc] = await db.insert(services).values({ shopId, kind: "seasonal_swap", name: "Zamena guma", durationMin: 30 }).returning();
     serviceId = svc!.id;
-    await db.insert(servicePrices).values({ shopId, serviceId, vehicleType: "car", priceRsd: 1500 });
+    const [car] = await db.insert(vehicleTypes).values({ shopId, label: "Putničko", icon: "🚗" }).returning();
+    carTypeId = car!.id;
+    await db.insert(servicePrices).values({ shopId, serviceId, vehicleTypeId: carTypeId, priceRsd: 1500 });
   });
 
   afterAll(async () => {

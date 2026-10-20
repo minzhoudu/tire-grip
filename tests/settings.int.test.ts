@@ -8,22 +8,28 @@ import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
-import { bookings, scheduleExceptions, servicePrices, services, shops, workingHours } from "../src/db/schema.ts";
+import { bookings, scheduleExceptions, servicePrices, services, shops, vehicleTypes, workingHours } from "../src/db/schema.ts";
 import { addDays, shopToday, utcToZoned, zonedToUtc } from "../src/lib/availability/index.ts";
 import { bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { createBookingRequest } from "../src/server/bookings.ts";
 import {
   createService,
+  createVehicleType,
   deleteException,
   deleteService,
+  deleteVehicleType,
   listExceptions,
   listServicesForSettings,
+  listVehicleTypesForSettings,
   listWorkingHours,
   moveService,
+  moveVehicleType,
   setServiceActive,
+  setVehicleTypeActive,
   updateBookingRules,
   updateService,
   updateShopInfo,
+  updateVehicleType,
   updateWorkingHours,
   upsertException,
 } from "../src/server/settings.ts";
@@ -35,6 +41,8 @@ const run = Date.now().toString(36);
 const slug = `it-settings-${run}`;
 let shopId = "";
 let swapId = "";
+let carTypeId = "";
+let suvTypeId = "";
 
 const date = addDays(shopToday({ timezone: TZ }, new Date()), 2);
 const at = (d: string, hh: number, mm = 0) => zonedToUtc(d, hh * 60 + mm, TZ).toISOString();
@@ -43,7 +51,7 @@ const request = (over: Record<string, unknown> = {}) =>
   bookingRequestSchema.parse({
     slug,
     serviceId: swapId,
-    vehicleType: "car",
+    vehicleTypeId: carTypeId,
     startsAt: at(date, 10),
     name: "Marko",
     phone: "064 700 1001",
@@ -61,7 +69,16 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
     await db.insert(workingHours).values([1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ shopId, weekday, opensAt: "08:00", closesAt: "17:00" })));
     const [svc] = await db.insert(services).values({ shopId, kind: "seasonal_swap", name: "Zamena guma", durationMin: 30 }).returning();
     swapId = svc!.id;
-    await db.insert(servicePrices).values({ shopId, serviceId: swapId, vehicleType: "car", priceRsd: 1500 });
+    const [car, suvType] = await db
+      .insert(vehicleTypes)
+      .values([
+        { shopId, label: "Putničko", icon: "🚗" },
+        { shopId, label: "SUV / džip", icon: "🚙" },
+      ])
+      .returning();
+    carTypeId = car!.id;
+    suvTypeId = suvType!.id;
+    await db.insert(servicePrices).values({ shopId, serviceId: swapId, vehicleTypeId: carTypeId, priceRsd: 1500 });
   });
 
   afterAll(async () => {
@@ -206,12 +223,12 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
         icon: "🔧",
         durationMin: 20,
         bookable: true,
-        prices: [{ vehicleType: "car", priceRsd: 900, durationMin: null }],
+        prices: [{ vehicleTypeId: carTypeId, priceRsd: 900, durationMin: null }],
       });
 
       let list = await listServicesForSettings(db, shopId);
       const created = list.find((s) => s.id === id);
-      expect(created).toMatchObject({ name: "Test usluga", hasBookings: false, prices: [{ vehicleType: "car", priceRsd: 900, durationMin: null }] });
+      expect(created).toMatchObject({ name: "Test usluga", hasBookings: false, prices: [{ vehicleTypeId: carTypeId, priceRsd: 900, durationMin: null }] });
 
       const updated = await updateService(db, shopId, id, {
         kind: "repair",
@@ -221,13 +238,13 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
         durationMin: 25,
         bookable: true,
         prices: [
-          { vehicleType: "car", priceRsd: 950, durationMin: null },
-          { vehicleType: "suv", priceRsd: 1100, durationMin: 30 },
+          { vehicleTypeId: carTypeId, priceRsd: 950, durationMin: null },
+          { vehicleTypeId: suvTypeId, priceRsd: 1100, durationMin: 30 },
         ],
       });
       expect(updated).toBe(true);
       list = await listServicesForSettings(db, shopId);
-      expect(list.find((s) => s.id === id)).toMatchObject({ name: "Test usluga 2", prices: expect.arrayContaining([{ vehicleType: "suv", priceRsd: 1100, durationMin: 30 }]) });
+      expect(list.find((s) => s.id === id)).toMatchObject({ name: "Test usluga 2", prices: expect.arrayContaining([{ vehicleTypeId: suvTypeId, priceRsd: 1100, durationMin: 30 }]) });
 
       expect(await setServiceActive(db, shopId, id, false)).toBe(true);
       list = await listServicesForSettings(db, shopId);
@@ -278,6 +295,61 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
       expect(list.find((s) => s.id === swapId)?.name).not.toBe("Hack");
 
       expect(await deleteService(db, otherShop.id, swapId)).toEqual({ ok: false, reason: "not_found" });
+      await db.delete(shops).where(eq(shops.id, otherShop.id));
+    });
+  });
+
+  describe("vehicle types", () => {
+    it("creates, updates, reorders and deletes a vehicle type with no bookings", async () => {
+      const db = getDb();
+      const id = await createVehicleType(db, shopId, { label: "Bicikl", icon: "🚲" });
+
+      let list = await listVehicleTypesForSettings(db, shopId);
+      expect(list.find((vt) => vt.id === id)).toMatchObject({ label: "Bicikl", icon: "🚲", hasBookings: false });
+
+      expect(await updateVehicleType(db, shopId, id, { label: "Bicikl / trotinet", icon: "🛴" })).toBe(true);
+      list = await listVehicleTypesForSettings(db, shopId);
+      expect(list.find((vt) => vt.id === id)).toMatchObject({ label: "Bicikl / trotinet", icon: "🛴" });
+
+      expect(await setVehicleTypeActive(db, shopId, id, false)).toBe(true);
+      list = await listVehicleTypesForSettings(db, shopId);
+      expect(list.find((vt) => vt.id === id)?.isActive).toBe(false);
+      await setVehicleTypeActive(db, shopId, id, true);
+
+      const before = await listVehicleTypesForSettings(db, shopId);
+      const idxBefore = before.findIndex((vt) => vt.id === id);
+      await moveVehicleType(db, shopId, id, "up");
+      const after = await listVehicleTypesForSettings(db, shopId);
+      const idxAfter = after.findIndex((vt) => vt.id === id);
+      expect(idxAfter).toBeLessThan(idxBefore);
+
+      expect(await deleteVehicleType(db, shopId, id)).toEqual({ ok: true });
+      list = await listVehicleTypesForSettings(db, shopId);
+      expect(list.find((vt) => vt.id === id)).toBeUndefined();
+    });
+
+    it("a vehicle type with bookings can only be deactivated, never deleted", async () => {
+      const db = getDb();
+      const r = await createBookingRequest(db, request({ startsAt: at(addDays(date, 25), 9), name: "Kupac Vozila", phone: "064 700 4001" }), {
+        source: "admin",
+      });
+      expect(r.ok).toBe(true);
+
+      expect(await deleteVehicleType(db, shopId, carTypeId)).toEqual({ ok: false, reason: "has_bookings" });
+      expect(await setVehicleTypeActive(db, shopId, carTypeId, false)).toBe(true);
+      const list = await listVehicleTypesForSettings(db, shopId);
+      expect(list.find((vt) => vt.id === carTypeId)).toMatchObject({ isActive: false, hasBookings: true });
+      await setVehicleTypeActive(db, shopId, carTypeId, true);
+    });
+
+    it("scopes updates and deletes to the owning shop", async () => {
+      const db = getDb();
+      const otherShop = (await db.insert(shops).values({ slug: `${slug}-other3`, name: "Druga3" }).returning())[0]!;
+      expect(await updateVehicleType(db, otherShop.id, carTypeId, { label: "Hack", icon: null })).toBe(false);
+      const list = await listVehicleTypesForSettings(db, shopId);
+      expect(list.find((vt) => vt.id === carTypeId)?.label).not.toBe("Hack");
+
+      expect(await deleteVehicleType(db, otherShop.id, carTypeId)).toEqual({ ok: false, reason: "not_found" });
       await db.delete(shops).where(eq(shops.id, otherShop.id));
     });
   });

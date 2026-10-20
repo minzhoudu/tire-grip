@@ -15,8 +15,8 @@ import {
   shopToday,
   zonedToUtc,
 } from "@/lib/availability";
-import { bookingRequestSchema, fieldErrors, vehicleTypes, type BookingRequestInput } from "@/lib/booking/request";
-import { newBookingMessage, vehicleTypeLabels } from "@/lib/booking/messages";
+import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/lib/booking/request";
+import { newBookingMessage } from "@/lib/booking/messages";
 import { formatPhone, whatsappLink } from "@/lib/phone";
 import { createBookingRequest } from "@/server/bookings";
 import { getOrigin } from "@/server/origin";
@@ -25,7 +25,7 @@ import { findOffer, loadBusy, loadShopContext } from "@/server/shops";
 const offerInput = z.object({
   slug: z.string().min(1).max(80),
   serviceId: z.uuid(),
-  vehicleType: z.enum(vehicleTypes),
+  vehicleTypeId: z.uuid(),
 });
 
 const daysInput = offerInput.extend({ offset: z.number().int().min(0).max(120).optional().default(0) });
@@ -53,7 +53,7 @@ export async function getDaysAction(
   const db = getDb();
   const ctx = await loadShopContext(db, input.data.slug);
   if (!ctx) return { ok: false };
-  const found = findOffer(ctx, input.data.serviceId, input.data.vehicleType);
+  const found = findOffer(ctx, input.data.serviceId, input.data.vehicleTypeId);
   if (!found) return { ok: false };
 
   const now = new Date();
@@ -93,7 +93,7 @@ export async function getSlotsAction(
   const db = getDb();
   const ctx = await loadShopContext(db, input.data.slug);
   if (!ctx) return { ok: false };
-  const found = findOffer(ctx, input.data.serviceId, input.data.vehicleType);
+  const found = findOffer(ctx, input.data.serviceId, input.data.vehicleTypeId);
   if (!found) return { ok: false };
 
   const { date } = input.data;
@@ -142,12 +142,12 @@ export async function submitBookingAction(raw: BookingRequestInput): Promise<Sub
     const result = await createBookingRequest(getDb(), req);
     if (!result.ok) return { ok: false, reason: result.reason };
 
-    const { booking, shop, serviceName } = result;
+    const { booking, shop, serviceName, vehicleTypeLabel } = result;
     const dayLabel = dayLongLabel(booking.date);
     const message = newBookingMessage({
       shopName: shop.name,
       serviceName,
-      vehicleTypeLabel: vehicleTypeLabels[req.vehicleType],
+      vehicleTypeLabel,
       vehicleLabel: req.vehicleLabel || undefined,
       dayLabel,
       time: booking.time,

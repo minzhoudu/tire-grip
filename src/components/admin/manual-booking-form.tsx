@@ -5,9 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { adminSlotsAction, createManualBookingAction } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
-import type { VehicleType } from "@/lib/availability/pricing";
-import { vehicleTypeIcons, vehicleTypeLabels } from "@/lib/booking/messages";
-import type { PublicService } from "@/server/shops";
+import type { PublicService, PublicVehicleType } from "@/server/shops";
 
 type Slots =
   | { state: "idle" }
@@ -18,11 +16,21 @@ type Slots =
 const input =
   "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20";
 
-export function ManualBookingForm({ slug, services, today }: { slug: string; services: PublicService[]; today: string }) {
+export function ManualBookingForm({
+  slug,
+  services,
+  vehicleTypes,
+  today,
+}: {
+  slug: string;
+  services: PublicService[];
+  vehicleTypes: PublicVehicleType[];
+  today: string;
+}) {
   const toast = useToast();
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const service = services.find((s) => s.id === serviceId);
-  const [vehicleType, setVehicleType] = useState<VehicleType>(service?.prices[0]?.vehicleType ?? "car");
+  const [vehicleTypeId, setVehicleTypeId] = useState(service?.prices[0]?.vehicleTypeId ?? "");
   const [date, setDate] = useState(today);
   const [slots, setSlots] = useState<Slots>({ state: "idle" });
   const [startsAt, setStartsAt] = useState<string | null>(null);
@@ -32,27 +40,28 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
   const [pending, startTransition] = useTransition();
   const [reload, setReload] = useState(0);
 
-  const price = service?.prices.find((p) => p.vehicleType === vehicleType);
+  const price = service?.prices.find((p) => p.vehicleTypeId === vehicleTypeId);
+  const vehicleTypeById = new Map(vehicleTypes.map((vt) => [vt.id, vt]));
 
   // Keep the vehicle type valid for the chosen service.
   useEffect(() => {
-    if (service && !service.prices.some((p) => p.vehicleType === vehicleType)) {
-      setVehicleType(service.prices[0]?.vehicleType ?? "car");
+    if (service && !service.prices.some((p) => p.vehicleTypeId === vehicleTypeId)) {
+      setVehicleTypeId(service.prices[0]?.vehicleTypeId ?? "");
     }
-  }, [service, vehicleType]);
+  }, [service, vehicleTypeId]);
 
   useEffect(() => {
-    if (!serviceId || !date) return;
+    if (!serviceId || !date || !vehicleTypeId) return;
     let cancelled = false;
     setSlots({ state: "loading" });
     setStartsAt(null);
-    adminSlotsAction({ slug, serviceId, vehicleType, date })
+    adminSlotsAction({ slug, serviceId, vehicleTypeId, date })
       .then((r) => !cancelled && setSlots(r.ok ? { state: "ready", status: r.status, slots: r.slots } : { state: "error" }))
       .catch(() => !cancelled && setSlots({ state: "error" }));
     return () => {
       cancelled = true;
     };
-  }, [slug, serviceId, vehicleType, date, reload]);
+  }, [slug, serviceId, vehicleTypeId, date, reload]);
 
   if (services.length === 0) {
     return <p className="rounded-2xl border-2 border-navy-900 bg-white p-5">Radnja nema nijednu uslugu koja se zakazuje.</p>;
@@ -98,7 +107,7 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
       return;
     }
     startTransition(async () => {
-      const r = await createManualBookingAction({ slug, serviceId, vehicleType, startsAt, ...fields, reminderConsent: false });
+      const r = await createManualBookingAction({ slug, serviceId, vehicleTypeId, startsAt, ...fields, reminderConsent: false });
       if (r.ok) {
         setErrors({});
         setDone({ summary: r.summary, messageUrl: r.messageUrl });
@@ -131,15 +140,15 @@ export function ManualBookingForm({ slug, services, today }: { slug: string; ser
         <div className="mt-1.5 flex flex-wrap gap-2">
           {service?.prices.map((p) => (
             <button
-              key={p.vehicleType}
+              key={p.vehicleTypeId}
               type="button"
-              onClick={() => setVehicleType(p.vehicleType)}
-              aria-pressed={vehicleType === p.vehicleType}
+              onClick={() => setVehicleTypeId(p.vehicleTypeId)}
+              aria-pressed={vehicleTypeId === p.vehicleTypeId}
               className={`rounded-full border px-4 py-2.5 text-sm font-semibold ${
-                vehicleType === p.vehicleType ? "border-navy-900 bg-navy-900 text-white" : "border-slate-200 bg-slate-100"
+                vehicleTypeId === p.vehicleTypeId ? "border-navy-900 bg-navy-900 text-white" : "border-slate-200 bg-slate-100"
               }`}
             >
-              {vehicleTypeIcons[p.vehicleType]} {vehicleTypeLabels[p.vehicleType]} · {formatRsd(p.priceRsd)}
+              {vehicleTypeById.get(p.vehicleTypeId)?.icon} {vehicleTypeById.get(p.vehicleTypeId)?.label} · {formatRsd(p.priceRsd)}
             </button>
           ))}
         </div>

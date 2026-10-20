@@ -69,6 +69,3 @@ export function cancellationMessage(m: CustomerMessageInput): string {
     "Izvinite zbog neprijatnosti.",
   ].join("\n");
 }
-
-export const vehicleTypeLabels = { car: "Putničko", suv: "SUV / džip", van: "Kombi" } as const;
-export const vehicleTypeIcons = { car: "🚗", suv: "🚙", van: "🚐" } as const;

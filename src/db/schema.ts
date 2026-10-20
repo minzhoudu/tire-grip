@@ -45,7 +45,6 @@ export * from "./auth-schema";
 export const shopPlan = pgEnum("shop_plan", ["internal", "trial", "basic", "pro"]);
 export const signupStatus = pgEnum("signup_status", ["pending", "approved", "rejected"]);
 export const memberRole = pgEnum("member_role", ["owner", "staff"]);
-export const vehicleType = pgEnum("vehicle_type", ["car", "suv", "van"]);
 export const serviceKind = pgEnum("service_kind", [
   "seasonal_swap", // zamena letnje <-> zimske (gume na felnama)
   "mount_balance", // montaža + balansiranje
@@ -226,6 +225,28 @@ export const services = pgTable(
   ],
 );
 
+/** A kind of vehicle a shop services (car, SUV, van, or anything a shop adds — bicycle, motorcycle…). */
+export const vehicleTypes = pgTable(
+  "vehicle_types",
+  {
+    id: id(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    /** Emoji shown next to the label, e.g. 🚗 */
+    icon: text("icon"),
+    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: smallint("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("vehicle_types_shop_id_uq").on(t.shopId, t.id), // target for composite FKs
+    index("vehicle_types_shop_idx").on(t.shopId, t.sortOrder),
+  ],
+);
+
 /** Price (and optional duration) of a service per vehicle type. */
 export const servicePrices = pgTable(
   "service_prices",
@@ -233,7 +254,7 @@ export const servicePrices = pgTable(
     id: id(),
     shopId: uuid("shop_id").notNull(),
     serviceId: uuid("service_id").notNull(),
-    vehicleType: vehicleType("vehicle_type").notNull(),
+    vehicleTypeId: uuid("vehicle_type_id").notNull(),
     /** Whole dinars */
     priceRsd: integer("price_rsd").notNull(),
     durationMin: smallint("duration_min"),
@@ -245,7 +266,12 @@ export const servicePrices = pgTable(
       columns: [t.shopId, t.serviceId],
       foreignColumns: [services.shopId, services.id],
     }).onDelete("cascade"),
-    unique("service_prices_service_vehicle_uq").on(t.serviceId, t.vehicleType),
+    foreignKey({
+      name: "service_prices_vehicle_type_fk",
+      columns: [t.shopId, t.vehicleTypeId],
+      foreignColumns: [vehicleTypes.shopId, vehicleTypes.id],
+    }).onDelete("cascade"),
+    unique("service_prices_service_vehicle_uq").on(t.serviceId, t.vehicleTypeId),
     check("service_prices_price_nonneg", sql`${t.priceRsd} >= 0`),
     check("service_prices_duration_range", sql`${t.durationMin} is null or ${t.durationMin} between 5 and 480`),
   ],
@@ -363,7 +389,7 @@ export const vehicles = pgTable(
     customerId: uuid("customer_id").notNull(),
     /** Free text as typed by the customer: "Golf 7", "Škoda Octavia" */
     label: text("label").notNull(),
-    vehicleType: vehicleType("vehicle_type").notNull().default("car"),
+    vehicleTypeId: uuid("vehicle_type_id").notNull(),
     plate: text("plate"),
     /** e.g. "205/55 R16" */
     tireSize: text("tire_size"),
@@ -377,6 +403,11 @@ export const vehicles = pgTable(
       columns: [t.shopId, t.customerId],
       foreignColumns: [customers.shopId, customers.id],
     }).onDelete("cascade"),
+    foreignKey({
+      name: "vehicles_vehicle_type_fk",
+      columns: [t.shopId, t.vehicleTypeId],
+      foreignColumns: [vehicleTypes.shopId, vehicleTypes.id],
+    }),
     unique("vehicles_shop_id_uq").on(t.shopId, t.id),
     index("vehicles_customer_idx").on(t.customerId),
   ],
@@ -394,7 +425,7 @@ export const bookings = pgTable(
     serviceId: uuid("service_id").notNull(),
 
     /* snapshots — later price-list changes don't rewrite history */
-    vehicleType: vehicleType("vehicle_type").notNull(),
+    vehicleTypeId: uuid("vehicle_type_id").notNull(),
     priceRsd: integer("price_rsd").notNull(),
     durationMin: smallint("duration_min").notNull(),
 
@@ -430,6 +461,11 @@ export const bookings = pgTable(
       name: "bookings_service_fk",
       columns: [t.shopId, t.serviceId],
       foreignColumns: [services.shopId, services.id],
+    }),
+    foreignKey({
+      name: "bookings_vehicle_type_fk",
+      columns: [t.shopId, t.vehicleTypeId],
+      foreignColumns: [vehicleTypes.shopId, vehicleTypes.id],
     }),
     index("bookings_shop_start_idx").on(t.shopId, t.startsAt),
     index("bookings_shop_status_start_idx").on(t.shopId, t.status, t.startsAt),
@@ -552,6 +588,7 @@ export type NewShop = typeof shops.$inferInsert;
 export type PlatformAuditLog = typeof platformAuditLog.$inferSelect;
 export type PlatformImpersonationSession = typeof platformImpersonationSessions.$inferSelect;
 export type Service = typeof services.$inferSelect;
+export type VehicleTypeRow = typeof vehicleTypes.$inferSelect;
 export type ServicePrice = typeof servicePrices.$inferSelect;
 export type WorkingHours = typeof workingHours.$inferSelect;
 export type ScheduleException = typeof scheduleExceptions.$inferSelect;

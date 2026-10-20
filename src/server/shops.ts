@@ -11,6 +11,7 @@ import {
   servicePrices,
   services,
   shops,
+  vehicleTypes,
   workingHours,
   type Shop,
 } from "../db/schema.ts";
@@ -29,6 +30,12 @@ type Q = DB | Tx;
 /** Statuses that occupy a bay (mirrors the bookings_no_overlap constraint). */
 export const ACTIVE_STATUSES = ["pending", "confirmed", "completed"] as const;
 
+export interface PublicVehicleType {
+  id: string;
+  label: string;
+  icon: string | null;
+}
+
 export interface PublicService {
   id: string;
   kind: string;
@@ -37,18 +44,18 @@ export interface PublicService {
   description: string | null;
   bookable: boolean;
   durationMin: number;
-  prices: { vehicleType: VehicleType; priceRsd: number; durationMin: number | null }[];
+  prices: { vehicleTypeId: VehicleType; priceRsd: number; durationMin: number | null }[];
 }
 
 export interface ShopContext {
   shop: Shop;
   settings: ShopSettings;
   services: PublicService[];
+  /** Active vehicle types, ordered — the shop's own list, not a fixed set. */
+  vehicleTypes: PublicVehicleType[];
   weeklyHours: WeeklyHours[];
   exceptions: DateException[];
 }
-
-const VEHICLE_ORDER: VehicleType[] = ["car", "suv", "van"];
 
 /** Active shop by slug with active services, prices, weekly hours and upcoming exceptions. */
 export async function loadShopContext(db: Q, slug: string): Promise<ShopContext | null> {
@@ -59,13 +66,18 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
     .limit(1);
   if (!shop) return null;
 
-  const [serviceRows, priceRows, hourRows, exceptionRows] = await Promise.all([
+  const [serviceRows, priceRows, vehicleTypeRows, hourRows, exceptionRows] = await Promise.all([
     db
       .select()
       .from(services)
       .where(and(eq(services.shopId, shop.id), eq(services.isActive, true)))
       .orderBy(asc(services.sortOrder), asc(services.name)),
     db.select().from(servicePrices).where(eq(servicePrices.shopId, shop.id)),
+    db
+      .select()
+      .from(vehicleTypes)
+      .where(and(eq(vehicleTypes.shopId, shop.id), eq(vehicleTypes.isActive, true)))
+      .orderBy(asc(vehicleTypes.sortOrder)),
     db.select().from(workingHours).where(eq(workingHours.shopId, shop.id)),
     db
       .select()
@@ -73,6 +85,7 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
       .where(and(eq(scheduleExceptions.shopId, shop.id), gte(scheduleExceptions.date, sql`current_date - 1`))),
   ]);
 
+  const activeVehicleTypeIds = new Set(vehicleTypeRows.map((vt) => vt.id));
   const publicServices: PublicService[] = serviceRows.map((s) => ({
     id: s.id,
     kind: s.kind,
@@ -82,9 +95,8 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
     bookable: s.bookable,
     durationMin: s.durationMin,
     prices: priceRows
-      .filter((p) => p.serviceId === s.id)
-      .sort((a, b) => VEHICLE_ORDER.indexOf(a.vehicleType) - VEHICLE_ORDER.indexOf(b.vehicleType))
-      .map((p) => ({ vehicleType: p.vehicleType, priceRsd: p.priceRsd, durationMin: p.durationMin })),
+      .filter((p) => p.serviceId === s.id && activeVehicleTypeIds.has(p.vehicleTypeId))
+      .map((p) => ({ vehicleTypeId: p.vehicleTypeId, priceRsd: p.priceRsd, durationMin: p.durationMin })),
   }));
 
   return {
@@ -97,6 +109,7 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
       minNoticeMin: shop.minNoticeMin,
     },
     services: publicServices,
+    vehicleTypes: vehicleTypeRows.map((vt) => ({ id: vt.id, label: vt.label, icon: vt.icon })),
     weeklyHours: hourRows.map((h) => ({ weekday: h.weekday, opensAt: h.opensAt, closesAt: h.closesAt })),
     exceptions: exceptionRows.map((e) => ({ date: e.date, closed: e.closed, opensAt: e.opensAt, closesAt: e.closesAt })),
   };
@@ -106,11 +119,11 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
 export function findOffer(
   ctx: ShopContext,
   serviceId: string,
-  vehicleType: VehicleType,
+  vehicleTypeId: VehicleType,
 ): { service: PublicService; offer: Offer } | null {
   const service = ctx.services.find((s) => s.id === serviceId);
   if (!service) return null;
-  const offer = resolveOffer({ durationMin: service.durationMin, bookable: service.bookable, isActive: true }, service.prices, vehicleType);
+  const offer = resolveOffer({ durationMin: service.durationMin, bookable: service.bookable, isActive: true }, service.prices, vehicleTypeId);
   return offer ? { service, offer } : null;
 }
 

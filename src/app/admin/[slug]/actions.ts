@@ -11,7 +11,7 @@ import { getDb } from "@/db";
 import { dayLongLabel, utcToZoned } from "@/lib/availability";
 import { formatMinutes, parseTime } from "@/lib/availability/zoned";
 import { cancellationMessage, confirmationMessage, rejectionMessage } from "@/lib/booking/messages";
-import { bookingRequestSchema, fieldErrors, vehicleTypes, type BookingRequestInput } from "@/lib/booking/request";
+import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/lib/booking/request";
 import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "@/lib/booking/status";
 import { whatsappLink } from "@/lib/phone";
 import { adminDaySlots, changeBookingStatus, createBlock, deleteBlock, getBooking, type AdminBooking } from "@/server/admin";
@@ -84,7 +84,7 @@ export async function changeStatusAction(raw: z.input<typeof statusInput>): Prom
 const slotsInput = z.object({
   slug: slugSchema,
   serviceId: z.uuid(),
-  vehicleType: z.enum(vehicleTypes),
+  vehicleTypeId: z.uuid(),
   date: z.iso.date(),
 });
 
@@ -97,7 +97,7 @@ export async function adminSlotsAction(
   const db = getDb();
   const ctx = await loadShopContext(db, input.data.slug);
   if (!ctx) return { ok: false };
-  const day = await adminDaySlots(db, ctx, input.data.serviceId, input.data.vehicleType, input.data.date);
+  const day = await adminDaySlots(db, ctx, input.data.serviceId, input.data.vehicleTypeId, input.data.date);
   if (!day) return { ok: false };
   return {
     ok: true,
