@@ -27,9 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          # add `cache: pnpm` once pnpm-lock.yaml is committed
-      # No lockfile yet on the first PR; switch to --frozen-lockfile once it's committed.
-      - run: pnpm install
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       # Schema straight from src/db/schema.ts + the custom exclusion constraint,
       # then the constraint test suite against a real Postgres.
@@ -37,5 +36,6 @@ jobs:
       - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f drizzle/custom/0001_booking_no_overlap.sql
       - run: pnpm db:test
       - run: pnpm db:seed
-      - run: pnpm test --passWithNoTests
+      # Unit tests + integration tests against the Postgres service above
+      - run: pnpm test
       - run: pnpm build
