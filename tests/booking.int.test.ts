@@ -1,7 +1,7 @@
 /**
  * Integration test: booking requests against a real Postgres.
  * Needs DATABASE_URL with the current schema and the bookings_no_overlap
- * constraint (CI does `db:push` + the custom SQL). Skipped otherwise.
+ * constraint (CI applies the migrations with `pnpm db:setup`). Skipped otherwise.
  *
  * Creates its own throwaway shop (open every day 08–17, 2 bays) so it doesn't
  * depend on the seed or on what weekday the test runs.

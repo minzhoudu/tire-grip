@@ -9,7 +9,7 @@
  * Double booking is prevented in the database, not only in the app:
  * each booking occupies one "bay" (dizalica) for [starts_at, ends_at), and an
  * exclusion constraint forbids two active bookings on the same bay with
- * overlapping time ranges. See drizzle/custom/0001_booking_no_overlap.sql.
+ * overlapping time ranges. See drizzle/0001_booking_no_overlap.sql.
  *
  * History is protected: a service or vehicle that has bookings can't be
  * hard-deleted (deactivate it with is_active instead). To purge a whole shop,

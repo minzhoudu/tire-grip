@@ -10,11 +10,22 @@ Mobile-first SaaS za zakazivanje zamene guma kod vulkanizera: kupac kroz chat sa
 cp .env.example .env
 pnpm install
 pnpm db:up                 # Postgres u Dockeru
-pnpm db:setup              # šema iz src/db/schema.ts + pravilo protiv duplih termina
+pnpm db:setup              # primenjuje migracije iz drizzle/ (uključujući pravilo protiv duplih termina)
 pnpm db:test               # testovi ograničenja baze (rollback, bezbedno; traži psql)
 pnpm db:seed               # demo radnja "Brzi Točak" → /brzi-tocak
 pnpm dev
 ```
+
+### Promena šeme baze
+
+1. Izmeni `src/db/schema.ts`
+2. `pnpm db:generate`: pravi novu migraciju u `drizzle/` (pregledaj SQL pre commita)
+3. `pnpm db:setup`: primenjuje je na lokalnu bazu, bez brisanja podataka
+4. Commit-uj `drizzle/` zajedno sa izmenom šeme (CI pada ako migracija fali)
+
+Ne koristi `drizzle-kit push`: na bazi sa podacima pokušava da obriše i ponovo napravi kompozitna ograničenja i pada. Pravila koja Drizzle ne ume da izrazi (npr. `bookings_no_overlap`) idu u ručnu migraciju: `pnpm drizzle-kit generate --custom --name=ime`.
+
+`pnpm db:reset` **briše lokalnu bazu** i pravi je ispočetka iz migracija, sa demo podacima.
 
 ## Model podataka (korak 1)
 
@@ -33,7 +44,7 @@ pnpm dev
 
 ### Garancije na nivou baze
 
-- **Nema duplih termina:** svaka rezervacija zauzima jednu dizalicu; exclusion constraint `bookings_no_overlap` zabranjuje preklapanje aktivnih rezervacija na istoj dizalici. Otkazane/odbijene ne blokiraju termin, a uzastopni termini (10:00–10:30, 10:30–11:00) su dozvoljeni.
+- **Nema duplih termina:** svaka rezervacija zauzima jednu dizalicu; exclusion constraint `bookings_no_overlap` (migracija `drizzle/0001_booking_no_overlap.sql`) zabranjuje preklapanje aktivnih rezervacija na istoj dizalici. Otkazane/odbijene ne blokiraju termin, a uzastopni termini (10:00–10:30, 10:30–11:00) su dozvoljeni.
 - **Izolacija radnji:** deca referenciraju roditelje kompozitnim ključem `(shop_id, id)`, pa rezervacija ne može da pokazuje na klijenta, vozilo ili uslugu druge radnje.
 - **Istorija je zaštićena:** usluga ili vozilo sa rezervacijama ne može da se obriše (deaktivira se), cene se čuvaju kao snapshot u rezervaciji.
 
@@ -72,7 +83,6 @@ Testovi: `tests/booking-flow.test.ts`, `tests/phone-and-messages.test.ts`, `test
 
 ```bash
 # u .env: BETTER_AUTH_SECRET (openssl rand -base64 32) i BETTER_AUTH_URL=http://localhost:3000
-# posle promene šeme: pnpm db:setup
 pnpm admin:create pera@example.rs 'bar-10-karaktera' "Pera" brzi-tocak        # vlasnik
 pnpm admin:create radnik@example.rs 'bar-10-karaktera' "Mika" brzi-tocak staff # radnik
 ```
