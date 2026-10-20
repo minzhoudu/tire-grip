@@ -96,10 +96,9 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
       phones.map((phone, i) => createBookingRequest(db, request({ phone, name: `Paralelni ${i}`, startsAt: at(11) }))),
     );
 
-    const winners = results.filter((r) => r.ok);
-    expect(winners).toHaveLength(2);
-    expect(winners.map((r) => (r.ok ? r.booking.bay : 0)).sort()).toEqual([1, 2]);
-    expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, reason: "slot_unavailable" }]);
+    // One line per request so a failure shows exactly what each one got.
+    const outcomes = results.map((r) => (r.ok ? `bay ${r.booking.bay}` : r.reason)).sort();
+    expect(outcomes).toEqual(["bay 1", "bay 2", "slot_unavailable"]);
 
     const rows = await db
       .select({ id: bookings.id })
@@ -125,9 +124,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
           createBookingRequest(db, request({ phone: `064 9${round}0 00${String(i).padStart(2, "0")}`, name: `Talas ${round}-${i}`, startsAt })),
         ),
       );
-      const winners = results.filter((r) => r.ok);
-      expect(winners).toHaveLength(2);
-      expect(results.filter((r) => !r.ok).every((r) => !r.ok && r.reason === "slot_unavailable")).toBe(true);
+      const outcomes = results.map((r) => (r.ok ? `bay ${r.booking.bay}` : r.reason)).sort();
+      expect(outcomes, `round ${round}`).toEqual(["bay 1", "bay 2", ...Array(8).fill("slot_unavailable")]);
     }
   });
 
