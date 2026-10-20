@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openStatusText } from "../src/lib/availability/labels.ts";
-import { newBookingMessage } from "../src/lib/booking/messages.ts";
+import { confirmationMessage, newBookingMessage } from "../src/lib/booking/messages.ts";
 import { formatPhone, normalizePhone, whatsappLink } from "../src/lib/phone.ts";
 
 describe("normalizePhone", () => {
@@ -57,6 +57,27 @@ describe("newBookingMessage", () => {
       "💰 1.500 din",
       "👤 Marko · 📞 064 123 4567",
     ]);
+  });
+});
+
+describe("confirmationMessage", () => {
+  const base = {
+    shopName: "Vulkanizer Brzi Točak",
+    serviceName: "Zamena guma",
+    dayLabel: "petak 23.10.",
+    time: "08:30",
+    priceRsd: 1500,
+    bookingUrl: "https://tiregrip.rs/brzi-tocak",
+  };
+
+  it("points to 'javite nam' when there's no cancel link", () => {
+    expect(confirmationMessage(base)).toContain("Ako ne možete da dođete, javite nam. Vidimo se!");
+  });
+
+  it("includes the self-service cancel link when given one", () => {
+    const text = confirmationMessage({ ...base, cancelUrl: "https://tiregrip.rs/otkazi/abc-123" });
+    expect(text).toContain("Ako ne možete da dođete, otkažite ovde: https://tiregrip.rs/otkazi/abc-123");
+    expect(text).not.toContain("javite nam");
   });
 });
 

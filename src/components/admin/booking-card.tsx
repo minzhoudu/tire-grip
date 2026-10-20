@@ -6,7 +6,7 @@ import { changeStatusAction } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { vehicleTypeIcons, vehicleTypeLabels } from "@/lib/booking/messages";
-import { ACTIONS, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
+import { ACTIONS, CUSTOMER_CANCEL_REASON, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
 import { formatPhone, whatsappLink } from "@/lib/phone";
 
 export interface BookingCardData {
@@ -24,6 +24,7 @@ export interface BookingCardData {
   /** Shown only when the shop has more than one bay */
   bay: number | null;
   byPhone: boolean;
+  cancelReason: string | null;
 }
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -34,6 +35,9 @@ const STATUS_STYLES: Record<BookingStatus, string> = {
   rejected: "bg-slate-200 text-slate-500 line-through",
   no_show: "bg-red-100 text-red-800",
 };
+
+/** Cancelled by the customer (via the self-service link) stands out from a shop-initiated cancel. */
+const CANCELLED_BY_CUSTOMER_STYLE = "bg-red-100 text-red-800 line-through";
 
 const ACTION_STYLES: Record<BookingAction, string> = {
   confirm: "bg-navy-900 text-white",
@@ -96,9 +100,14 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
   }
 
   const chatUrl = whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `);
+  const cancelledByCustomer = status === "cancelled" && b.cancelReason === CUSTOMER_CANCEL_REASON;
 
   return (
-    <article className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${status === "pending" ? "ring-2 ring-accent-400" : ""}`}>
+    <article
+      className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${
+        status === "pending" ? "ring-2 ring-accent-400" : cancelledByCustomer ? "ring-2 ring-red-400" : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-mono text-xl font-bold tabular-nums">{b.timeRange}</p>
@@ -107,7 +116,9 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
             {b.bay !== null && <> · dizalica {b.bay}</>}
           </p>
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_STYLES[status]}`}>{STATUS_LABELS[status]}</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${cancelledByCustomer ? CANCELLED_BY_CUSTOMER_STYLE : STATUS_STYLES[status]}`}>
+          {cancelledByCustomer ? "Otkazao kupac" : STATUS_LABELS[status]}
+        </span>
       </div>
 
       <div className="mt-3 border-t border-slate-100 pt-3">
@@ -125,6 +136,9 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
           </a>
           <span className="ml-auto font-mono font-bold tabular-nums text-rust-600">{formatRsd(b.priceRsd)}</span>
         </div>
+        {cancelledByCustomer && (
+          <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-800">❌ Kupac je otkazao ovaj termin.</p>
+        )}
         {b.customerNote && <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">📝 {b.customerNote}</p>}
       </div>
 

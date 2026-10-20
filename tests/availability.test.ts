@@ -232,6 +232,20 @@ describe("bookable days (chat chips)", () => {
     expect(days).toEqual(["2026-10-19", "2026-10-21", "2026-10-22"]);
   });
 
+  it("offset pages through the bookable days instead of listing from the start", () => {
+    const now = at("2026-10-17", "13:30");
+    const firstPage = listBookableDays({ ...input({ now }), limit: 3 }).map((d) => d.date);
+    const secondPage = listBookableDays({ ...input({ now }), offset: 3, limit: 3 }).map((d) => d.date);
+    expect(firstPage).toEqual(["2026-10-19", "2026-10-20", "2026-10-21"]);
+    expect(secondPage).toEqual(["2026-10-22", "2026-10-23", "2026-10-24"]);
+    // skipping 1 then taking 3 overlaps the tail of the first page
+    expect(listBookableDays({ ...input({ now }), offset: 1, limit: 3 }).map((d) => d.date)).toEqual([
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22",
+    ]);
+  });
+
   it("chip labels read like the chat: Danas, Sutra, sub 24.10.", () => {
     expect(dayChipLabel("2026-10-19", "2026-10-19")).toBe("Danas");
     expect(dayChipLabel("2026-10-20", "2026-10-19")).toBe("Sutra");

@@ -187,13 +187,21 @@ export function getDayAvailability(input: AvailabilityInput & { date: string }):
 /**
  * Days (today … horizon) that are open and still have at least one free slot
  * for this service — the "Danas / Sutra / sub 10.10." chips in the chat.
+ * `offset` skips that many bookable days first (paging through the horizon
+ * a page at a time instead of listing all of it).
  */
-export function listBookableDays(input: AvailabilityInput & { limit?: number }): DayAvailability[] {
+export function listBookableDays(input: AvailabilityInput & { limit?: number; offset?: number }): DayAvailability[] {
   const today = shopToday(input.shop, input.now);
+  const offset = input.offset ?? 0;
   const days: DayAvailability[] = [];
+  let seen = 0;
   for (let i = 0; i <= input.shop.bookingHorizonDays; i++) {
     const day = getDayAvailability({ ...input, date: addDays(today, i) });
     if (day.status === "open" && day.slots.some((s) => s.available)) {
+      if (seen < offset) {
+        seen++;
+        continue;
+      }
       days.push(day);
       if (input.limit && days.length >= input.limit) break;
     }

@@ -31,6 +31,9 @@ export const STATUS_LABELS: Record<BookingStatus, string> = {
 
 export const FINAL_STATUSES: BookingStatus[] = ["completed", "cancelled", "rejected", "no_show"];
 
+/** cancelReason set by the self-service cancel link (/otkazi/{id}) — lets the admin UI tell it apart from a shop-initiated cancel. */
+export const CUSTOMER_CANCEL_REASON = "Otkazao kupac";
+
 /** Actions that make sense for a booking right now, in display order. */
 export function allowedActions(status: BookingStatus, startsAt: Date, now: Date): BookingAction[] {
   const started = now.getTime() >= startsAt.getTime();

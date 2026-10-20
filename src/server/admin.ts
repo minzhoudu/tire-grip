@@ -30,6 +30,7 @@ export interface AdminBooking {
   vehicleLabel: string | null;
   customerNote: string | null;
   createdAt: Date;
+  cancelReason: string | null;
 }
 
 const bookingColumns = {
@@ -49,6 +50,7 @@ const bookingColumns = {
   vehicleLabel: vehicles.label,
   customerNote: bookings.customerNote,
   createdAt: bookings.createdAt,
+  cancelReason: bookings.cancelReason,
 };
 
 function bookingQuery(db: DB) {

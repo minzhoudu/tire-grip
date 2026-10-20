@@ -19,6 +19,7 @@ import { bookingRequestSchema, fieldErrors, vehicleTypes, type BookingRequestInp
 import { newBookingMessage, vehicleTypeLabels } from "@/lib/booking/messages";
 import { formatPhone, whatsappLink } from "@/lib/phone";
 import { createBookingRequest } from "@/server/bookings";
+import { getOrigin } from "@/server/origin";
 import { findOffer, loadBusy, loadShopContext } from "@/server/shops";
 
 const offerInput = z.object({
@@ -26,6 +27,8 @@ const offerInput = z.object({
   serviceId: z.uuid(),
   vehicleType: z.enum(vehicleTypes),
 });
+
+const daysInput = offerInput.extend({ offset: z.number().int().min(0).max(120).optional().default(0) });
 
 export interface DayOption {
   date: string;
@@ -38,9 +41,13 @@ export interface SlotOption {
   available: boolean;
 }
 
-/** Up to 6 upcoming days that still have a free slot for this service. */
-export async function getDaysAction(raw: z.input<typeof offerInput>): Promise<{ ok: true; days: DayOption[] } | { ok: false }> {
-  const input = offerInput.safeParse(raw);
+/** One page (6) of upcoming days that still have a free slot, starting after `offset` such days. */
+const DAYS_PAGE_SIZE = 6;
+
+export async function getDaysAction(
+  raw: z.input<typeof daysInput>,
+): Promise<{ ok: true; days: DayOption[]; hasMore: boolean } | { ok: false }> {
+  const input = daysInput.safeParse(raw);
   if (!input.success) return { ok: false };
 
   const db = getDb();
@@ -58,6 +65,7 @@ export async function getDaysAction(raw: z.input<typeof offerInput>): Promise<{ 
     zonedToUtc(today, 0, tz),
     zonedToUtc(addDays(today, ctx.settings.bookingHorizonDays + 1), 0, tz),
   );
+  // Ask for one extra day to know whether another page follows, without showing it.
   const days = listBookableDays({
     shop: ctx.settings,
     weeklyHours: ctx.weeklyHours,
@@ -65,9 +73,12 @@ export async function getDaysAction(raw: z.input<typeof offerInput>): Promise<{ 
     busy,
     durationMin: found.offer.durationMin,
     now,
-    limit: 6,
+    offset: input.data.offset,
+    limit: DAYS_PAGE_SIZE + 1,
   });
-  return { ok: true, days: days.map((d) => ({ date: d.date, label: dayChipLabel(d.date, today) })) };
+  const hasMore = days.length > DAYS_PAGE_SIZE;
+  const page = days.slice(0, DAYS_PAGE_SIZE);
+  return { ok: true, days: page.map((d) => ({ date: d.date, label: dayChipLabel(d.date, today) })), hasMore };
 }
 
 const slotsInput = offerInput.extend({ date: z.iso.date() });
@@ -113,6 +124,8 @@ export interface BookingConfirmation {
   phoneDisplay: string;
   /** Opens WhatsApp to the shop with the request prefilled (until the admin panel exists) */
   shopWhatsappUrl: string | null;
+  /** Self-service cancel link (/otkazi/{bookingId}) */
+  cancelUrl: string;
 }
 
 export type SubmitBookingResult =
@@ -154,6 +167,7 @@ export async function submitBookingAction(raw: BookingRequestInput): Promise<Sub
         customerName: req.name,
         phoneDisplay: formatPhone(req.phone),
         shopWhatsappUrl: shop.phone ? whatsappLink(shop.phone, message) : null,
+        cancelUrl: `${await getOrigin()}/otkazi/${booking.id}`,
       },
     };
   } catch (err) {

@@ -39,6 +39,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       priceRsd: b.priceRsd,
       bay: shop.bays > 1 ? b.bay : null,
       byPhone: b.source === "admin",
+      cancelReason: b.cancelReason,
     };
     const list = groups.get(start.date) ?? [];
     list.push(card);

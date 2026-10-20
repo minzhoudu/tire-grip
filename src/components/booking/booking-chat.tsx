@@ -30,9 +30,13 @@ export interface ChatShop {
 
 type Load<T> = { state: "idle" } | { state: "loading" } | { state: "error" } | { state: "ready"; data: T };
 
+/** Must match DAYS_PAGE_SIZE in src/app/[slug]/actions.ts — how many day chips "Sledeći dani" advances by. */
+const DAYS_PAGE_SIZE = 6;
+
 export function BookingChat({ shop }: { shop: ChatShop }) {
   const [flow, dispatch] = useReducer(flowReducer, initialFlow);
-  const [days, setDays] = useState<Load<DayOption[]>>({ state: "idle" });
+  const [days, setDays] = useState<Load<{ days: DayOption[]; hasMore: boolean }>>({ state: "idle" });
+  const [dayOffset, setDayOffset] = useState(0);
   const [slots, setSlots] = useState<Load<{ dayLabel: string; slots: SlotOption[] }>>({ state: "idle" });
   const [confirmation, setConfirmation] = useState<BookingConfirmation | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -42,19 +46,24 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
   const price = service?.prices.find((p) => p.vehicleType === flow.vehicleType) ?? null;
   const offerKey = flow.serviceId && flow.vehicleType ? { slug: shop.slug, serviceId: flow.serviceId, vehicleType: flow.vehicleType } : null;
 
-  // Load bookable days when entering the "day" step.
+  // A fresh service/vehicle choice starts back at the first page of days.
+  useEffect(() => {
+    setDayOffset(0);
+  }, [flow.serviceId, flow.vehicleType]);
+
+  // Load bookable days when entering the "day" step (or paging through them).
   useEffect(() => {
     if (flow.step !== "day" || !offerKey) return;
     let cancelled = false;
     setDays({ state: "loading" });
-    getDaysAction(offerKey)
-      .then((r) => !cancelled && setDays(r.ok ? { state: "ready", data: r.days } : { state: "error" }))
+    getDaysAction({ ...offerKey, offset: dayOffset })
+      .then((r) => !cancelled && setDays(r.ok ? { state: "ready", data: { days: r.days, hasMore: r.hasMore } } : { state: "error" }))
       .catch(() => !cancelled && setDays({ state: "error" }));
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flow.step, flow.serviceId, flow.vehicleType, reloadKey]);
+  }, [flow.step, flow.serviceId, flow.vehicleType, dayOffset, reloadKey]);
 
   // Load slots when entering the "time" step (also after "slot just taken").
   useEffect(() => {
@@ -179,6 +188,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
                     phone={shop.phone}
                     onPick={(date) => dispatch({ type: "chooseDay", date })}
                     onBack={() => dispatch({ type: "back" })}
+                    onMore={() => setDayOffset((o) => o + DAYS_PAGE_SIZE)}
                     onRetry={retry}
                   />
                 )}
@@ -275,8 +285,8 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
   );
 }
 
-function dayChip(days: Load<DayOption[]>, date: string): string {
-  return days.state === "ready" ? (days.data.find((d) => d.date === date)?.label ?? date) : date;
+function dayChip(days: Load<{ days: DayOption[]; hasMore: boolean }>, date: string): string {
+  return days.state === "ready" ? (days.data.days.find((d) => d.date === date)?.label ?? date) : date;
 }
 
 /* ------------------------------------------------------------------ pieces */
@@ -417,17 +427,19 @@ function DayPicker({
   phone,
   onPick,
   onBack,
+  onMore,
   onRetry,
 }: {
-  load: Load<DayOption[]>;
+  load: Load<{ days: DayOption[]; hasMore: boolean }>;
   phone: string | null;
   onPick: (date: string) => void;
   onBack: () => void;
+  onMore: () => void;
   onRetry: () => void;
 }) {
   if (load.state === "idle" || load.state === "loading") return <Loading />;
   if (load.state === "error") return <LoadError onRetry={onRetry} />;
-  if (load.data.length === 0) {
+  if (load.data.days.length === 0) {
     return (
       <>
         <Notice>
@@ -451,11 +463,12 @@ function DayPicker({
   }
   return (
     <Chips>
-      {load.data.map((d) => (
+      {load.data.days.map((d) => (
         <Chip key={d.date} onClick={() => onPick(d.date)}>
           📅 {d.label}
         </Chip>
       ))}
+      {load.data.hasMore && <Chip onClick={onMore}>Sledeći dani →</Chip>}
       <BackChip onClick={onBack} />
     </Chips>
   );
@@ -726,6 +739,13 @@ function Confirmation({ confirmation: c }: { confirmation: BookingConfirmation }
         {c.status === "confirmed"
           ? `Termin je potvrđen. Cena: ${formatRsd(c.priceRsd)}.`
           : `Radnja vam potvrđuje termin porukom na ${c.phoneDisplay}.`}
+      </p>
+      <p className="mt-2 text-sm">
+        Planovi se promenili?{" "}
+        <a href={c.cancelUrl} className="font-semibold text-navy-700 underline">
+          Otkažite termin ovde
+        </a>
+        .
       </p>
     </div>
   );

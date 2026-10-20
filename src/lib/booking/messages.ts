@@ -37,6 +37,8 @@ export interface CustomerMessageInput {
   address?: string | null;
   /** Public booking page, for picking another slot */
   bookingUrl: string;
+  /** Self-service cancel link, shown only in the confirmation message */
+  cancelUrl?: string;
 }
 
 /** Shop → customer after "Potvrdi". */
@@ -46,7 +48,7 @@ export function confirmationMessage(m: CustomerMessageInput): string {
     `${m.serviceName}, ${m.dayLabel} u ${m.time}h.`,
     `Cena: ${formatRsd(m.priceRsd)}.`,
     ...(m.address ? [`Adresa: ${m.address}`] : []),
-    "Ako ne možete da dođete, javite nam. Vidimo se!",
+    m.cancelUrl ? `Ako ne možete da dođete, otkažite ovde: ${m.cancelUrl}` : "Ako ne možete da dođete, javite nam. Vidimo se!",
   ].join("\n");
 }
 

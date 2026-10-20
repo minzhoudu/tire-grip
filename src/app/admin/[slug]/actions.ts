@@ -30,6 +30,7 @@ async function customerMessageUrl(
   kind: "confirm" | "reject" | "cancel",
 ): Promise<string> {
   const local = utcToZoned(booking.startsAt, shop.timezone);
+  const origin = await getOrigin();
   const input = {
     shopName: shop.name,
     serviceName: booking.serviceName,
@@ -37,7 +38,8 @@ async function customerMessageUrl(
     time: formatMinutes(local.minutes),
     priceRsd: booking.priceRsd,
     address: shop.address,
-    bookingUrl: `${await getOrigin()}/${shop.slug}`,
+    bookingUrl: `${origin}/${shop.slug}`,
+    cancelUrl: kind === "confirm" ? `${origin}/otkazi/${booking.id}` : undefined,
   };
   const text =
     kind === "confirm" ? confirmationMessage(input) : kind === "reject" ? rejectionMessage(input) : cancellationMessage(input);
