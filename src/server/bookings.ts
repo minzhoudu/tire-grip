@@ -1,14 +1,14 @@
 /**
  * Creating a booking request from the public chat.
  *
- * 1. Re-validate everything on the server: the shop, the service/vehicle
- *    offer, and that the requested start time is a real, currently free slot
- *    (same engine the chat used, so hours, notice and horizon all apply).
- * 2. In one transaction: upsert the customer by phone, find or create the
- *    vehicle, then insert the booking on the first free bay. If another
- *    request grabbed that bay a moment earlier, the database exclusion
- *    constraint rejects the insert (SQLSTATE 23P01) and we try the next bay
- *    inside a savepoint. If every bay is gone, nothing is written.
+ * 1. Re-validate the shop and the service/vehicle offer.
+ * 2. In one transaction, holding a per-shop advisory lock so simultaneous
+ *    requests are handled one after another: re-check that the start time
+ *    is a real, currently free slot (same engine the chat used, so hours,
+ *    notice and horizon all apply), upsert the customer by phone, find or
+ *    create the vehicle, and insert the booking on the first free bay.
+ * 3. The exclusion constraint stays as the last line of defense (23P01 →
+ *    next bay). If the slot is gone, nothing is written.
  */
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
@@ -53,9 +53,9 @@ export function pgErrorCode(err: unknown): string | undefined {
 
 const EXCLUSION_VIOLATION = "23P01";
 /**
- * Two requests inserting overlapping rows at the same instant can deadlock on
- * an exclusion constraint (each waits for the other's uncommitted row).
- * Postgres aborts one with 40P01; the savepoint lets us simply try again.
+ * Fallbacks only: with the per-shop advisory lock, inserts don't collide. If a
+ * write ever bypasses the lock (e.g. a manual SQL insert), the exclusion
+ * constraint still rejects overlaps (23P01) and a deadlock (40P01) is retried.
  */
 const DEADLOCK = "40P01";
 const MAX_DEADLOCK_RETRIES = 5;
@@ -88,27 +88,33 @@ export async function createBookingRequest(
   const tz = ctx.settings.timezone;
   const startsAt = new Date(req.startsAt);
   const { date } = utcToZoned(startsAt, tz);
-  const busy = await loadBusy(db, ctx.shop.id, zonedToUtc(date, 0, tz), zonedToUtc(addDays(date, 1), 0, tz));
   const settings =
     source === "admin"
       ? { ...ctx.settings, minNoticeMin: 0, bookingHorizonDays: Math.max(ctx.settings.bookingHorizonDays, ADMIN_HORIZON_DAYS) }
       : ctx.settings;
-  const day = getDayAvailability({
-    shop: settings,
-    weeklyHours: ctx.weeklyHours,
-    exceptions: ctx.exceptions,
-    busy,
-    durationMin: offer.durationMin,
-    now,
-    date,
-  });
-  const slot = day.slots.find((s) => s.startsAt.getTime() === startsAt.getTime());
-  if (!slot || !slot.available) return { ok: false, reason: "slot_unavailable" };
-
   const status = source === "admin" || ctx.shop.autoConfirm ? ("confirmed" as const) : ("pending" as const);
 
   try {
     return await db.transaction(async (tx) => {
+      // One booking write per shop at a time. Without this, simultaneous requests
+      // all see the same free bays, collide on the exclusion constraint and can
+      // deadlock (Postgres only detects that after deadlock_timeout, 1 s). With it,
+      // each request reads availability after the previous one has committed.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${ctx.shop.id}, 7))`);
+
+      const busy = await loadBusy(tx, ctx.shop.id, zonedToUtc(date, 0, tz), zonedToUtc(addDays(date, 1), 0, tz));
+      const day = getDayAvailability({
+        shop: settings,
+        weeklyHours: ctx.weeklyHours,
+        exceptions: ctx.exceptions,
+        busy,
+        durationMin: offer.durationMin,
+        now,
+        date,
+      });
+      const slot = day.slots.find((s) => s.startsAt.getTime() === startsAt.getTime());
+      if (!slot || !slot.available) throw new SlotTaken();
+
       const consent = req.reminderConsent
         ? { reminderConsent: true, reminderConsentAt: now, optedOutAt: null }
         : {};
