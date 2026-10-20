@@ -4,7 +4,7 @@
  * Admin server actions. Each one re-checks that the signed-in user belongs to
  * the shop in `slug` (requireShopAccess) and only ever touches that shop's rows.
  */
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/db";
@@ -18,7 +18,8 @@ import { adminDaySlots, changeBookingStatus, createBlock, deleteBlock, getBookin
 import { getAuth } from "@/server/auth";
 import { createBookingRequest } from "@/server/bookings";
 import { getOrigin } from "@/server/origin";
-import { requireShopAccess } from "@/server/session";
+import { endImpersonation, IMPERSONATION_COOKIE, logPlatformAction } from "@/server/platform";
+import { requireShopAccess, requireUser } from "@/server/session";
 import { loadShopContext } from "@/server/shops";
 
 const slugSchema = z.string().min(1).max(80);
@@ -174,4 +175,17 @@ export async function deleteBlockAction(raw: { slug: string; blockId: string }):
 export async function signOutAction(): Promise<void> {
   await getAuth().api.signOut({ headers: await headers() });
   redirect("/prijava");
+}
+
+/** Ends the current "Uđi kao" support session, if any, and sends the admin back to the platform dashboard. */
+export async function endImpersonationAction(): Promise<void> {
+  const user = await requireUser();
+  const jar = await cookies();
+  const sessionId = jar.get(IMPERSONATION_COOKIE)?.value;
+  if (sessionId) {
+    const ended = await endImpersonation(getDb(), sessionId, user.id);
+    if (ended) await logPlatformAction(getDb(), { adminUserId: user.id, shopId: ended.shopId, action: "impersonation_ended" });
+  }
+  jar.delete(IMPERSONATION_COOKIE);
+  redirect("/platforma");
 }

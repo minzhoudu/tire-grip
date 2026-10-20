@@ -3,7 +3,7 @@
  * Uses Better Auth's own password hashing and adapter, the same calls its
  * sign-up endpoint makes, so the account signs in normally afterwards.
  */
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { shopMembers, shops, users } from "../db/schema.ts";
 import { MIN_PASSWORD_LENGTH, type Auth } from "./auth.ts";
@@ -56,12 +56,16 @@ export async function createShopUser(db: DB, auth: Auth, input: CreateShopUserIn
   return { ok: true, userId, created };
 }
 
-/** Shops the user can manage, by name. */
+/**
+ * Shops the user belongs to, whatever their status — the caller (the /admin
+ * landing page) decides what to show for a pending, rejected or suspended
+ * shop; only an approved + active one gets a working admin panel.
+ */
 export async function listUserShops(db: DB, userId: string) {
   return db
-    .select({ slug: shops.slug, name: shops.name, role: shopMembers.role })
+    .select({ slug: shops.slug, name: shops.name, role: shopMembers.role, isActive: shops.isActive, signupStatus: shops.signupStatus })
     .from(shopMembers)
     .innerJoin(shops, eq(shops.id, shopMembers.shopId))
-    .where(and(eq(shopMembers.userId, userId), eq(shops.isActive, true)))
+    .where(eq(shopMembers.userId, userId))
     .orderBy(shops.name);
 }

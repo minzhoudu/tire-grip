@@ -43,6 +43,7 @@ export * from "./auth-schema";
 /* ----------------------------------------------------------------- enums */
 
 export const shopPlan = pgEnum("shop_plan", ["internal", "trial", "basic", "pro"]);
+export const signupStatus = pgEnum("signup_status", ["pending", "approved", "rejected"]);
 export const memberRole = pgEnum("member_role", ["owner", "staff"]);
 export const vehicleType = pgEnum("vehicle_type", ["car", "suv", "van"]);
 export const serviceKind = pgEnum("service_kind", [
@@ -106,6 +107,8 @@ export const shops = pgTable(
     timezone: text("timezone").notNull().default("Europe/Belgrade"),
     plan: shopPlan("plan").notNull().default("trial"),
     isActive: boolean("is_active").notNull().default(true),
+    /** Self-signups start 'pending'; CLI/seed-created shops default to 'approved' (no review needed). */
+    signupStatus: signupStatus("signup_status").notNull().default("approved"),
 
     /* booking settings */
     /** Number of lifts/bays that can work in parallel */
@@ -147,6 +150,50 @@ export const shopMembers = pgTable(
     createdAt: createdAt(),
   },
   (t) => [unique("shop_members_shop_user_uq").on(t.shopId, t.userId), index("shop_members_user_idx").on(t.userId)],
+);
+
+/* ----------------------------------------------------------------- platform admin */
+
+/**
+ * Every action the platform owner takes on a shop from outside the normal
+ * owner/staff roles (approve/reject signup, suspend, change plan, impersonate).
+ * Append-only — never updated or deleted.
+ */
+export const platformAuditLog = pgTable(
+  "platform_audit_log",
+  {
+    id: id(),
+    adminUserId: text("admin_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    shopId: uuid("shop_id").references(() => shops.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    details: text("details"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("platform_audit_log_shop_idx").on(t.shopId), index("platform_audit_log_admin_idx").on(t.adminUserId)],
+);
+
+/**
+ * A time-boxed grant letting a platform admin use a shop's admin panel for
+ * support, without adding a shop_members row. Ends at expiresAt or when
+ * endedAt is set, whichever comes first.
+ */
+export const platformImpersonationSessions = pgTable(
+  "platform_impersonation_sessions",
+  {
+    id: id(),
+    adminUserId: text("admin_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("platform_impersonation_shop_idx").on(t.shopId), index("platform_impersonation_admin_idx").on(t.adminUserId)],
 );
 
 /* ----------------------------------------------------------------- services & prices */
@@ -502,6 +549,8 @@ export const reminderMessages = pgTable(
 
 export type Shop = typeof shops.$inferSelect;
 export type NewShop = typeof shops.$inferInsert;
+export type PlatformAuditLog = typeof platformAuditLog.$inferSelect;
+export type PlatformImpersonationSession = typeof platformImpersonationSessions.$inferSelect;
 export type Service = typeof services.$inferSelect;
 export type ServicePrice = typeof servicePrices.$inferSelect;
 export type WorkingHours = typeof workingHours.$inferSelect;

@@ -95,3 +95,11 @@ pnpm admin:create radnik@example.rs 'bar-10-karaktera' "Mika" brzi-tocak staff #
 Bezbednost: svaka admin stranica i svaka server action proverava da je korisnik član radnje iz URL-a (`requireShopAccess`), a svi upiti su ograničeni na tu radnju. Stranica podešavanja dodatno traži `requireOwnerAccess` (404 za radnike). Promena statusa je uslovni `UPDATE … WHERE status IN (…)`, pa dva telefona ne mogu da je primene dvaput. Prijava ide preko Better Auth HTTP endpointa, zbog ugrađenog ograničenja broja pokušaja.
 
 Testovi: `tests/booking-status.test.ts`, `tests/admin.int.test.ts` (prijava, statusi, istorija, ručni unos, blokade, izolacija radnji) i `tests/settings.int.test.ts` (podešavanja: granični slučajevi oko dizalica, radnog vremena i brisanja usluga).
+
+## Platforma (korak 5)
+
+**Javna registracija** (`/registracija`): nova radnja se sama prijavi (naziv, adresa/slug sa proverom dostupnosti uživo, podaci vlasnika, telefon). Nalog se odmah pravi i vlasnik se uloguje, ali radnja ide u stanje `pending` (`shops.signup_status`) — `/admin` prikazuje da čeka pregled umesto panela, dok je ne odobri vlasnik platforme. Naplata je za sada ručna (plan se menja iz `/platforma`, bez integracije sa platnim provajderom); `/` je javna početna strana sa objašnjenjem i pozivom na registraciju.
+
+**`/platforma`** — dashboard vlasnika platforme (ne vlasnika radnje): pregled svih radnji, odobravanje/odbijanje novih registracija, suspenzija, ručna promena plana i „Uđi kao" (impersonacija) za podršku — vremenski ograničena (1h) sesija bez diranja `shop_members`, vidljiva vlasniku radnje kao baner sa dugmetom za prekid. Pristup preko `PLATFORM_ADMIN_EMAILS` u `.env` (lista email adresa odvojenih zarezom — nema posebne kolone u bazi, namerno, da se ne može eskalirati kroz app bug). Svaka akcija (odobrenje, suspenzija, promena plana, ulazak/izlazak iz impersonacije) se beleži u `platform_audit_log`.
+
+Testovi: `tests/platform.int.test.ts` (dashboard, suspenzija, plan, impersonacija) i `tests/signup.int.test.ts` (registracija, duple adrese/emailovi, slaba lozinka).
