@@ -14,7 +14,9 @@ import { MIN_PASSWORD_LENGTH } from "@/server/auth";
 import { shopAdminUrl } from "@/server/origin";
 import {
   approveShop,
+  assignOwner,
   changeShopPlan,
+  deleteShop,
   IMPERSONATION_COOKIE,
   logPlatformAction,
   rejectShop,
@@ -28,12 +30,13 @@ const shopIdInput = z.object({ shopId: z.uuid() });
 
 export type PlatformActionResult = { ok: true } | { ok: false; error: string };
 
+/** Approves a pending signup, or un-rejects a previously rejected one. */
 export async function approveShopAction(raw: z.input<typeof shopIdInput>): Promise<PlatformActionResult> {
   const input = shopIdInput.safeParse(raw);
   if (!input.success) return { ok: false, error: "Neispravan zahtev." };
   const admin = await requirePlatformAdmin();
   const ok = await approveShop(getDb(), input.data.shopId);
-  if (!ok) return { ok: false, error: "Radnja više nije na čekanju." };
+  if (!ok) return { ok: false, error: "Radnja je već odobrena." };
   await logPlatformAction(getDb(), { adminUserId: admin.id, shopId: input.data.shopId, action: "signup_approved" });
   return { ok: true };
 }
@@ -116,4 +119,31 @@ export async function resetUserPasswordAction(raw: z.input<typeof resetPasswordI
   if (!ok) return { ok: false, error: "Nalog nije pronađen." };
   await logPlatformAction(getDb(), { adminUserId: admin.id, action: "password_reset", details: `userId=${input.data.userId}` });
   return { ok: true };
+}
+
+/** Permanently deletes a shop and everything scoped to it (bookings, customers, services, members, …). */
+export async function deleteShopAction(raw: z.input<typeof shopIdInput>): Promise<PlatformActionResult> {
+  const input = shopIdInput.safeParse(raw);
+  if (!input.success) return { ok: false, error: "Neispravan zahtev." };
+  const admin = await requirePlatformAdmin();
+  const deleted = await deleteShop(getDb(), input.data.shopId);
+  if (!deleted) return { ok: false, error: "Radnja nije pronađena." };
+  // shopId is gone now — the audit row just records what it was.
+  await logPlatformAction(getDb(), { adminUserId: admin.id, action: "shop_deleted", details: `${deleted.name} (/${deleted.slug})` });
+  return { ok: true };
+}
+
+const assignOwnerInput = z.object({ shopId: z.uuid(), email: z.email() });
+
+export type AssignOwnerActionResult = { ok: true; userName: string } | { ok: false; error: string };
+
+/** Makes an existing account the owner of a shop — for reconnecting an account after its shop was deleted, or handing a shop to someone else. */
+export async function assignOwnerAction(raw: z.input<typeof assignOwnerInput>): Promise<AssignOwnerActionResult> {
+  const input = assignOwnerInput.safeParse(raw);
+  if (!input.success) return { ok: false, error: "Unesite ispravan email." };
+  const admin = await requirePlatformAdmin();
+  const result = await assignOwner(getDb(), input.data);
+  if (!result.ok) return { ok: false, error: result.reason === "shop_not_found" ? "Radnja nije pronađena." : "Nalog sa tim emailom ne postoji." };
+  await logPlatformAction(getDb(), { adminUserId: admin.id, shopId: input.data.shopId, action: "owner_assigned", details: input.data.email });
+  return { ok: true, userName: result.userName };
 }

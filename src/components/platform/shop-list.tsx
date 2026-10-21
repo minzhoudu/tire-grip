@@ -1,8 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-import { approveShopAction, changeShopPlanAction, rejectShopAction, setShopActiveAction, startImpersonationAction } from "@/app/platforma/actions";
+import { useState, useTransition } from "react";
+import {
+  approveShopAction,
+  assignOwnerAction,
+  changeShopPlanAction,
+  deleteShopAction,
+  rejectShopAction,
+  setShopActiveAction,
+  startImpersonationAction,
+} from "@/app/platforma/actions";
 import { ToastProvider, useToast } from "@/components/ui/toast";
 import { Toggle } from "@/components/ui/toggle";
 import type { PlatformShopRow } from "@/server/platform";
@@ -73,6 +81,11 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
       }
       router.push(r.adminUrl);
     });
+  }
+
+  function deleteShop(s: PlatformShopRow) {
+    const sure = window.confirm(`Trajno obrisati radnju "${s.name}" (/${s.slug})? Brišu se svi termini, kupci i podešavanja. Ne može se vratiti.`);
+    if (sure) run(() => deleteShopAction({ shopId: s.id }), "Radnja obrisana.");
   }
 
   return (
@@ -153,12 +166,99 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
                   Uđi kao (podrška)
                 </button>
               )}
+              {s.signupStatus === "rejected" && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => run(() => approveShopAction({ shopId: s.id }), "Ponovo odobreno.")}
+                  className="mt-3 w-full rounded-xl border-2 border-navy-900 bg-accent-500 px-4 py-2.5 text-sm font-mono font-bold text-navy-950 disabled:opacity-50"
+                >
+                  Ponovo odobri
+                </button>
+              )}
+              <AssignOwnerForm shopId={s.id} />
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => deleteShop(s)}
+                className="mt-2 w-full rounded-xl border-2 border-red-300 px-4 py-2.5 text-sm font-semibold text-red-700 disabled:opacity-50"
+              >
+                Obriši radnju
+              </button>
             </ShopCard>
           ))}
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+/** Inline "assign owner" form on a shop card — adds/upgrades an existing account's membership to owner. */
+function AssignOwnerForm({ shopId }: { shopId: string }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      const r = await assignOwnerAction({ shopId, email });
+      if (!r.ok) {
+        toast(r.error, "error");
+        return;
+      }
+      toast(`${r.userName} je sada vlasnik.`);
+      setEmail("");
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => setOpen(true)}
+        className="mt-2 w-full rounded-xl border-2 border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50"
+      >
+        Dodeli vlasnika
+      </button>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="mt-2 flex flex-col gap-2">
+      <input
+        type="email"
+        required
+        placeholder="email postojećeg naloga"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20"
+      />
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex-1 rounded-xl border-2 border-navy-900 bg-navy-900 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+        >
+          {pending ? "Čuvam…" : "Dodeli"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setEmail("");
+          }}
+          className="rounded-xl border-2 border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700"
+        >
+          Otkaži
+        </button>
+      </div>
+    </form>
   );
 }
 

@@ -5,7 +5,7 @@
  * never silent, since these actions touch other businesses' access.
  */
 import { hashPassword } from "better-auth/crypto";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { accounts, bookings, platformAuditLog, platformImpersonationSessions, shopMembers, shops, users, type Shop } from "../db/schema.ts";
 
@@ -109,12 +109,12 @@ export async function logPlatformAction(
   });
 }
 
-/** Only applies while still pending, so a stale screen can't double-approve or flip a decision. */
+/** Approves a pending signup, or un-rejects a previously rejected one — no-op once already approved. */
 export async function approveShop(db: DB, shopId: string): Promise<boolean> {
   const rows = await db
     .update(shops)
     .set({ signupStatus: "approved", isActive: true })
-    .where(and(eq(shops.id, shopId), eq(shops.signupStatus, "pending")))
+    .where(and(eq(shops.id, shopId), inArray(shops.signupStatus, ["pending", "rejected"])))
     .returning({ id: shops.id });
   return rows.length > 0;
 }
@@ -137,6 +137,37 @@ export async function setShopActive(db: DB, shopId: string, isActive: boolean): 
 export async function changeShopPlan(db: DB, shopId: string, plan: Shop["plan"]): Promise<boolean> {
   const rows = await db.update(shops).set({ plan }).where(eq(shops.id, shopId)).returning({ id: shops.id });
   return rows.length > 0;
+}
+
+/**
+ * Deletes a shop and everything scoped to it (bookings, customers, services, members, …) —
+ * every shop_id foreign key cascades. Returns the deleted shop's name/slug for the audit log,
+ * since the id is gone once this returns and platform_audit_log.shop_id only accepts a live id.
+ */
+export async function deleteShop(db: DB, shopId: string): Promise<{ name: string; slug: string } | null> {
+  const rows = await db.delete(shops).where(eq(shops.id, shopId)).returning({ name: shops.name, slug: shops.slug });
+  return rows[0] ?? null;
+}
+
+export type AssignOwnerResult = { ok: true; userName: string } | { ok: false; reason: "shop_not_found" | "user_not_found" };
+
+/**
+ * Makes an existing account the owner of a shop (adds the membership, or upgrades it to
+ * owner if already staff) — for reconnecting an account after its shop was deleted, or
+ * handing a shop to a different owner.
+ */
+export async function assignOwner(db: DB, input: { shopId: string; email: string }): Promise<AssignOwnerResult> {
+  const email = input.email.trim().toLowerCase();
+  const [shop] = await db.select({ id: shops.id }).from(shops).where(eq(shops.id, input.shopId)).limit(1);
+  if (!shop) return { ok: false, reason: "shop_not_found" };
+  const [user] = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.email, email)).limit(1);
+  if (!user) return { ok: false, reason: "user_not_found" };
+
+  await db
+    .insert(shopMembers)
+    .values({ shopId: shop.id, userId: user.id, role: "owner" })
+    .onConflictDoUpdate({ target: [shopMembers.shopId, shopMembers.userId], set: { role: "owner" } });
+  return { ok: true, userName: user.name };
 }
 
 /* ----------------------------------------------------------------- impersonation ("Uđi kao") */

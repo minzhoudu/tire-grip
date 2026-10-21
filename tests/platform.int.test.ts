@@ -5,13 +5,15 @@
  */
 import "dotenv/config";
 import { hashPassword, verifyPassword } from "better-auth/crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
 import { accounts, platformAuditLog, platformImpersonationSessions, shopMembers, shops, users } from "../src/db/schema.ts";
 import {
   approveShop,
+  assignOwner,
   changeShopPlan,
+  deleteShop,
   endImpersonation,
   getImpersonatedShop,
   listAllShops,
@@ -118,6 +120,78 @@ describe.skipIf(!process.env.DATABASE_URL)("platform dashboard (Postgres)", () =
     const [row] = await db.select().from(shops).where(eq(shops.id, shop!.id));
     expect(row).toMatchObject({ signupStatus: "rejected", isActive: false });
     await db.delete(shops).where(eq(shops.id, shop!.id));
+  });
+
+  it("re-approving a rejected shop makes it active again, but approving an already-approved shop is a no-op", async () => {
+    const db = getDb();
+    const [shop] = await db.insert(shops).values({ slug: `${pendingSlug}-4`, name: "Za ponovno odobrenje", signupStatus: "rejected", isActive: false }).returning();
+    expect(await approveShop(db, shop!.id)).toBe(true);
+    const [row] = await db.select().from(shops).where(eq(shops.id, shop!.id));
+    expect(row).toMatchObject({ signupStatus: "approved", isActive: true });
+
+    expect(await approveShop(db, shop!.id)).toBe(false); // already approved
+    await db.delete(shops).where(eq(shops.id, shop!.id));
+  });
+
+  it("deletes a shop and cascades to its bookings and memberships, leaving other shops untouched", async () => {
+    const db = getDb();
+    const [shop] = await db.insert(shops).values({ slug: `${pendingSlug}-5`, name: "Za brisanje", signupStatus: "approved", isActive: true }).returning();
+    const deleteUserId = `it-delete-owner-${run}`;
+    await db.insert(users).values({ id: deleteUserId, email: `delete-owner-${run}@example.rs`, name: "Brisani Vlasnik", emailVerified: true });
+    await db.insert(shopMembers).values({ shopId: shop!.id, userId: deleteUserId, role: "owner" });
+
+    const deleted = await deleteShop(db, shop!.id);
+    expect(deleted).toMatchObject({ name: "Za brisanje", slug: `${pendingSlug}-5` });
+
+    expect(await db.select().from(shops).where(eq(shops.id, shop!.id))).toHaveLength(0);
+    expect(await db.select().from(shopMembers).where(eq(shopMembers.shopId, shop!.id))).toHaveLength(0);
+    // the other test shop is unaffected
+    expect(await db.select().from(shops).where(eq(shops.id, approvedShopId))).toHaveLength(1);
+
+    expect(await deleteShop(db, shop!.id)).toBeNull(); // already gone
+    await db.delete(users).where(eq(users.id, deleteUserId));
+  });
+
+  describe("assignOwner", () => {
+    it("adds the membership for an account with none yet", async () => {
+      const db = getDb();
+      const newOwnerId = `it-new-owner-${run}`;
+      const email = `new-owner-${run}@example.rs`;
+      await db.insert(users).values({ id: newOwnerId, email, name: "Novi Vlasnik", emailVerified: true });
+
+      const result = await assignOwner(db, { shopId: approvedShopId, email: email.toUpperCase() }); // case-insensitive
+      expect(result).toMatchObject({ ok: true, userName: "Novi Vlasnik" });
+      const [row] = await db.select().from(shopMembers).where(and(eq(shopMembers.shopId, approvedShopId), eq(shopMembers.userId, newOwnerId)));
+      expect(row).toMatchObject({ role: "owner" });
+
+      await db.delete(shopMembers).where(eq(shopMembers.userId, newOwnerId));
+      await db.delete(users).where(eq(users.id, newOwnerId));
+    });
+
+    it("upgrades an existing staff membership to owner instead of duplicating it", async () => {
+      const db = getDb();
+      const staffId = `it-staff-${run}`;
+      const email = `staff-${run}@example.rs`;
+      await db.insert(users).values({ id: staffId, email, name: "Osoblje", emailVerified: true });
+      await db.insert(shopMembers).values({ shopId: approvedShopId, userId: staffId, role: "staff" });
+
+      expect(await assignOwner(db, { shopId: approvedShopId, email })).toMatchObject({ ok: true });
+      const rows = await db.select().from(shopMembers).where(and(eq(shopMembers.shopId, approvedShopId), eq(shopMembers.userId, staffId)));
+      expect(rows).toHaveLength(1); // upgraded in place, not duplicated
+      expect(rows[0]).toMatchObject({ role: "owner" });
+
+      await db.delete(shopMembers).where(eq(shopMembers.userId, staffId));
+      await db.delete(users).where(eq(users.id, staffId));
+    });
+
+    it("fails closed for an unknown shop or email", async () => {
+      const db = getDb();
+      expect(await assignOwner(db, { shopId: "00000000-0000-0000-0000-000000000000", email: "nobody@example.rs" })).toEqual({
+        ok: false,
+        reason: "shop_not_found",
+      });
+      expect(await assignOwner(db, { shopId: approvedShopId, email: "nobody@example.rs" })).toEqual({ ok: false, reason: "user_not_found" });
+    });
   });
 
   it("suspends and reactivates an approved shop without touching signupStatus", async () => {
