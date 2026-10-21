@@ -67,8 +67,9 @@ export interface CreateBookingOptions {
    * "web" = customer chat (shop settings apply as-is).
    * "admin" = entered by the shop (phone call): no minimum notice, a longer
    * horizon, and the booking is confirmed right away.
+   * "reminder" = followed a seasonal reminder link — same rules as "web", just tagged for attribution.
    */
-  source?: "web" | "admin";
+  source?: "web" | "admin" | "reminder";
 }
 
 /** How far ahead the shop itself can enter bookings. */

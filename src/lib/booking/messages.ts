@@ -69,3 +69,11 @@ export function cancellationMessage(m: CustomerMessageInput): string {
     "Izvinite zbog neprijatnosti.",
   ].join("\n");
 }
+
+/** Default starting point for a reminder campaign's editable message template. */
+export const DEFAULT_REMINDER_TEMPLATE = "Zdravo {ime}! Vreme je za zamenu guma u {radnja}. Zakažite termin: {link}";
+
+/** Fills a reminder campaign's template — {ime}, {link}, {radnja} — with no vehicle mention (a customer may have more than one). */
+export function reminderMessage(template: string, v: { ime: string; link: string; radnja: string }): string {
+  return template.replace(/\{ime\}/g, v.ime).replace(/\{link\}/g, v.link).replace(/\{radnja\}/g, v.radnja);
+}

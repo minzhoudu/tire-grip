@@ -6,7 +6,7 @@ import { getDb } from "@/db";
 import { getOpenStatus, openStatusText, shopToday } from "@/lib/availability";
 import { loadShopContext } from "@/server/shops";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ r?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   await connection();
@@ -19,10 +19,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ShopBookingPage({ params }: Props) {
+export default async function ShopBookingPage({ params, searchParams }: Props) {
   // Always render per request: open status and free slots change by the minute.
   await connection();
   const { slug } = await params;
+  const { r: reminderToken } = await searchParams;
   const ctx = await loadShopContext(getDb(), slug);
   if (!ctx) notFound();
 
@@ -41,5 +42,5 @@ export default async function ShopBookingPage({ params }: Props) {
     vehicleTypes: ctx.vehicleTypes,
   };
 
-  return <BookingChat shop={shop} />;
+  return <BookingChat shop={shop} reminderToken={reminderToken} />;
 }

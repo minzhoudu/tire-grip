@@ -11,6 +11,7 @@ export function getAdminNavItems(slug: string, pending: number, isOwner: boolean
     { href: base, label: "Zahtevi", badge: pending },
     { href: `${base}/novi`, label: "+ Novi termin" },
     { href: `${base}/blokade`, label: "Blokade" },
+    ...(isOwner ? [{ href: `${base}/podsetnici`, label: "Podsetnici" }] : []),
     ...(isOwner ? [{ href: `${base}/podesavanja`, label: "Podešavanja" }] : []),
   ];
 }

@@ -32,7 +32,7 @@ type Load<T> = { state: "idle" } | { state: "loading" } | { state: "error" } | {
 /** Must match DAYS_PAGE_SIZE in src/app/[slug]/actions.ts — how many day chips "Sledeći dani" advances by. */
 const DAYS_PAGE_SIZE = 6;
 
-export function BookingChat({ shop }: { shop: ChatShop }) {
+export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderToken?: string }) {
   const [flow, dispatch] = useReducer(flowReducer, initialFlow);
   const [days, setDays] = useState<Load<{ days: DayOption[]; hasMore: boolean }>>({ state: "idle" });
   const [dayOffset, setDayOffset] = useState(0);
@@ -236,6 +236,7 @@ export function BookingChat({ shop }: { shop: ChatShop }) {
                     ...offerKey,
                     startsAt: flow.slot!.startsAt,
                     ...fields,
+                    reminderToken,
                   });
                   if (result.ok) {
                     setConfirmation(result.confirmation);

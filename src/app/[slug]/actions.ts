@@ -20,6 +20,7 @@ import { newBookingMessage } from "@/lib/booking/messages";
 import { formatPhone, whatsappLink } from "@/lib/phone";
 import { createBookingRequest } from "@/server/bookings";
 import { getOrigin } from "@/server/origin";
+import { linkBookingToReminder } from "@/server/reminders";
 import { findOffer, loadBusy, loadShopContext } from "@/server/shops";
 
 const offerInput = z.object({
@@ -133,14 +134,16 @@ export type SubmitBookingResult =
   | { ok: false; reason: "invalid"; errors: Record<string, string> }
   | { ok: false; reason: "slot_unavailable" | "service_unavailable" | "shop_not_found" | "error" };
 
-export async function submitBookingAction(raw: BookingRequestInput): Promise<SubmitBookingResult> {
+export async function submitBookingAction(raw: BookingRequestInput & { reminderToken?: string }): Promise<SubmitBookingResult> {
   const parsed = bookingRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
   const req = parsed.data;
+  const reminderToken = z.uuid().safeParse(raw.reminderToken).data;
 
   try {
-    const result = await createBookingRequest(getDb(), req);
+    const result = await createBookingRequest(getDb(), req, { source: reminderToken ? "reminder" : "web" });
     if (!result.ok) return { ok: false, reason: result.reason };
+    if (reminderToken) await linkBookingToReminder(getDb(), { shopId: result.shop.id, token: reminderToken, bookingId: result.booking.id });
 
     const { booking, shop, serviceName, vehicleTypeLabel } = result;
     const dayLabel = dayLongLabel(booking.date);
