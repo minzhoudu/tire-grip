@@ -76,6 +76,10 @@ export default async function AdminHome() {
         </ul>
       )}
 
+      <Link href="/admin/nova-radnja" className="mt-6 text-center text-sm font-semibold text-navy-700 underline">
+        + Dodaj novu radnju
+      </Link>
+
       <form action={signOutAction} className="mt-8">
         <button className="text-sm font-medium text-slate-500 underline">Odjavi se</button>
       </form>

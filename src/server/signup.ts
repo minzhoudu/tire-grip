@@ -4,7 +4,7 @@
  * are new here — the shop starts `signupStatus: 'pending', isActive: false`
  * until the platform owner approves it from /platforma.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { shopMembers, shops, users } from "../db/schema.ts";
 import { MIN_PASSWORD_LENGTH, type Auth } from "./auth.ts";
@@ -59,6 +59,52 @@ export async function registerShop(db: DB, auth: Auth, input: RegisterShopInput)
     return { ok: true, slug: shop!.slug };
   } catch {
     // Lost a race on the slug's unique index — the pre-check passed a moment too early.
+    return { ok: false, reason: "slug_taken" };
+  }
+}
+
+export interface AddShopInput {
+  userId: string;
+  shopName: string;
+  slug: string;
+  city: string;
+  /** Already normalized to E.164 */
+  phone: string;
+}
+
+export type AddShopResult = { ok: true; slug: string } | { ok: false; reason: "slug_taken" | "too_many_pending" };
+
+/**
+ * Self-service (/admin/nova-radnja): an already signed-in account adds another shop, still
+ * pending approval like any new signup. One pending request at a time per account, so the
+ * review queue can't be spammed.
+ */
+export async function addShop(db: DB, input: AddShopInput): Promise<AddShopResult> {
+  if (!(await isSlugAvailable(db, input.slug))) return { ok: false, reason: "slug_taken" };
+
+  const [existingPending] = await db
+    .select({ id: shopMembers.id })
+    .from(shopMembers)
+    .innerJoin(shops, eq(shops.id, shopMembers.shopId))
+    .where(and(eq(shopMembers.userId, input.userId), eq(shops.signupStatus, "pending")))
+    .limit(1);
+  if (existingPending) return { ok: false, reason: "too_many_pending" };
+
+  try {
+    const [shop] = await db
+      .insert(shops)
+      .values({
+        slug: input.slug,
+        name: input.shopName.trim(),
+        city: input.city.trim() || null,
+        phone: input.phone,
+        signupStatus: "pending",
+        isActive: false,
+      })
+      .returning({ id: shops.id, slug: shops.slug });
+    await db.insert(shopMembers).values({ shopId: shop!.id, userId: input.userId, role: "owner" });
+    return { ok: true, slug: shop!.slug };
+  } catch {
     return { ok: false, reason: "slug_taken" };
   }
 }

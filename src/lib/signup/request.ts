@@ -41,3 +41,7 @@ export const signupRequestSchema = z.object({
 
 export type SignupRequestInput = z.input<typeof signupRequestSchema>;
 export type SignupRequest = z.output<typeof signupRequestSchema>;
+
+/** An already signed-in account adding another shop (/admin/nova-radnja) — no owner/email/password fields, those are already known. */
+export const addShopRequestSchema = signupRequestSchema.pick({ shopName: true, slug: true, city: true, phone: true });
+export type AddShopRequestInput = z.input<typeof addShopRequestSchema>;

@@ -36,15 +36,25 @@ export async function platformUrl(): Promise<string> {
   return `${proto}://platform.${root}/platforma`;
 }
 
+/** Absolute link to `path` on the bare root domain — unchanged (relative) if we're already there. */
+async function toRootUrl(path: string): Promise<string> {
+  const host = (await headers()).get("host");
+  if (!subdomainOf(host)) return path;
+  const root = await currentRootHost();
+  const proto = root.startsWith("localhost") ? "http" : "https";
+  return `${proto}://${root}${path}`;
+}
+
 /**
  * Absolute link to /prijava on the bare root domain. Signing out must always leave whatever
  * subdomain you were on — otherwise logging into a different account there can 404: the next
  * login with no `next` defaults to /admin, which middleware ties to THIS subdomain's shop.
  */
 export async function rootLoginUrl(): Promise<string> {
-  const host = (await headers()).get("host");
-  if (!subdomainOf(host)) return "/prijava"; // already on the bare domain
-  const root = await currentRootHost();
-  const proto = root.startsWith("localhost") ? "http" : "https";
-  return `${proto}://${root}/prijava`;
+  return toRootUrl("/prijava");
+}
+
+/** Absolute link to the "add another shop" form, for a link in a shop's own admin panel (which lives on that shop's subdomain). */
+export async function addShopUrl(): Promise<string> {
+  return toRootUrl("/admin/nova-radnja");
 }

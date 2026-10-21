@@ -4,13 +4,13 @@
  * reflects that status so /admin can show the right message.
  */
 import "dotenv/config";
-import { eq } from "drizzle-orm";
-import { afterAll, describe, expect, it } from "vitest";
+import { and, eq, inArray } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
 import { shopMembers, shops, users } from "../src/db/schema.ts";
 import { listUserShops } from "../src/server/accounts.ts";
 import { getAuth } from "../src/server/auth.ts";
-import { isSlugAvailable, registerShop } from "../src/server/signup.ts";
+import { addShop, isSlugAvailable, registerShop } from "../src/server/signup.ts";
 
 if (process.env.CI && !process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests in CI");
 if (process.env.CI && !process.env.BETTER_AUTH_SECRET) throw new Error("BETTER_AUTH_SECRET is required for integration tests in CI");
@@ -86,5 +86,54 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.BETTER_AUTH_SECRET)("p
     const result = await registerShop(db, auth, input({ slug: otherSlug, email: `weak-${run}@example.rs`, password: "kratka" }));
     expect(result).toEqual({ ok: false, reason: "weak_password" });
     expect(await isSlugAvailable(db, otherSlug)).toBe(true); // nothing was written
+  });
+
+  describe("addShop (an existing account adds another shop)", () => {
+    const ownerId = `it-addshop-owner-${run}`;
+    const firstSlug = `it-addshop-first-${run}`;
+    const secondSlug = `it-addshop-second-${run}`;
+
+    beforeAll(async () => {
+      await getDb()
+        .insert(users)
+        .values({ id: ownerId, email: `addshop-owner-${run}@example.rs`, name: "Vlasnik Više Radnji", emailVerified: true });
+    });
+
+    afterAll(async () => {
+      const db = getDb();
+      await db.delete(shopMembers).where(eq(shopMembers.userId, ownerId));
+      await db.delete(shops).where(inArray(shops.slug, [firstSlug, secondSlug]));
+      await db.delete(users).where(eq(users.id, ownerId));
+    });
+
+    it("creates a second pending shop owned by the same account", async () => {
+      const db = getDb();
+      const result = await addShop(db, { userId: ownerId, shopName: "Druga Radnja", slug: firstSlug, city: "Niš", phone: "+381641234567" });
+      expect(result).toEqual({ ok: true, slug: firstSlug });
+
+      const [shop] = await db.select().from(shops).where(eq(shops.slug, firstSlug));
+      expect(shop).toMatchObject({ signupStatus: "pending", isActive: false, name: "Druga Radnja" });
+      const [member] = await db.select().from(shopMembers).where(and(eq(shopMembers.shopId, shop!.id), eq(shopMembers.userId, ownerId)));
+      expect(member).toMatchObject({ role: "owner" });
+    });
+
+    it("refuses a slug that's already taken", async () => {
+      const result = await addShop(getDb(), { userId: ownerId, shopName: "X", slug: firstSlug, city: "", phone: "+381641234567" });
+      expect(result).toEqual({ ok: false, reason: "slug_taken" });
+    });
+
+    it("refuses a second request while one is still pending", async () => {
+      const db = getDb();
+      const result = await addShop(db, { userId: ownerId, shopName: "Treća Radnja", slug: secondSlug, city: "", phone: "+381641234567" });
+      expect(result).toEqual({ ok: false, reason: "too_many_pending" });
+      expect(await isSlugAvailable(db, secondSlug)).toBe(true); // nothing was written
+    });
+
+    it("allows a new request once the pending one is resolved", async () => {
+      const db = getDb();
+      await db.update(shops).set({ signupStatus: "approved", isActive: true }).where(eq(shops.slug, firstSlug));
+      const result = await addShop(db, { userId: ownerId, shopName: "Treća Radnja", slug: secondSlug, city: "", phone: "+381641234567" });
+      expect(result).toEqual({ ok: true, slug: secondSlug });
+    });
   });
 });

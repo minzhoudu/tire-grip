@@ -3,9 +3,11 @@ import { connection } from "next/server";
 import { getDb } from "@/db";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { ShopSwitcher } from "@/components/admin/shop-switcher";
 import { ToastProvider } from "@/components/ui/toast";
+import { listUserShops } from "@/server/accounts";
 import { countPending } from "@/server/admin";
-import { getOrigin, shopPublicUrl } from "@/server/origin";
+import { addShopUrl, getOrigin, shopAdminUrl, shopPublicUrl } from "@/server/origin";
 import { getAdminBase, requireShopAccess } from "@/server/session";
 import { endImpersonationAction, signOutAction } from "./actions";
 
@@ -21,17 +23,29 @@ export default async function AdminShopLayout({
   await connection();
   const { slug } = await params;
   const { shop, user, role, isImpersonating } = await requireShopAccess(slug);
-  const [pending, base, origin] = await Promise.all([countPending(getDb(), shop), getAdminBase(slug), getOrigin()]);
+  const [pending, base, origin, userShops, newShopUrl] = await Promise.all([
+    countPending(getDb(), shop),
+    getAdminBase(slug),
+    getOrigin(),
+    isImpersonating ? Promise.resolve([]) : listUserShops(getDb(), user.id),
+    addShopUrl(),
+  ]);
   const publicUrl = shopPublicUrl(shop.slug, origin);
+  const otherShops = userShops
+    .filter((s) => s.slug !== shop.slug && s.signupStatus === "approved" && s.isActive)
+    .map((s) => ({ name: s.name, url: shopAdminUrl(s.slug) }));
 
   return (
     <ToastProvider>
       <div className="flex min-h-dvh bg-slate-100 md:items-stretch">
         {/* Desktop sidebar — mobile keeps the sticky top header + tabs below instead. */}
         <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:bg-navy-900 md:text-white">
-          <div className="p-5">
-            <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
-            <p className="truncate text-xs text-slate-300">{user.name}</p>
+          <div className="flex items-start justify-between gap-2 p-5">
+            <div className="min-w-0">
+              <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
+              <p className="truncate text-xs text-slate-300">{user.name}</p>
+            </div>
+            {!isImpersonating && <ShopSwitcher otherShops={otherShops} addShopUrl={newShopUrl} />}
           </div>
           <div className="flex-1 px-3">
             <AdminSidebar base={base} pending={pending} isOwner={role === "owner"} />
@@ -66,6 +80,7 @@ export default async function AdminShopLayout({
                 <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
                 <p className="truncate text-xs text-slate-300">{user.name}</p>
               </div>
+              {!isImpersonating && <ShopSwitcher otherShops={otherShops} addShopUrl={newShopUrl} />}
               <a
                 href={publicUrl}
                 target="_blank"

@@ -9,8 +9,22 @@ export interface MenuItem {
   disabled?: boolean;
 }
 
-/** Small "⋯" dropdown for secondary actions on a card — closes on an outside click or after picking an item. */
-export function Menu({ items }: { items: MenuItem[] }) {
+/**
+ * Small dropdown for secondary actions — closes on an outside click or after picking an item.
+ * Defaults to a "⋯" circular button; pass `trigger`/`triggerClassName` to reuse it as e.g. a named switcher.
+ */
+export function Menu({
+  items,
+  trigger = "⋯",
+  triggerClassName = "grid size-8 place-items-center rounded-full border-2 border-slate-300 text-slate-500 active:scale-95",
+  ariaLabel = "Više opcija",
+}: {
+  items: MenuItem[];
+  trigger?: React.ReactNode;
+  triggerClassName?: string;
+  /** Only needed when `trigger` isn't self-describing text (the default "⋯", an icon, …). */
+  ariaLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -30,10 +44,10 @@ export function Menu({ items }: { items: MenuItem[] }) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Više opcija"
-        className="grid size-8 place-items-center rounded-full border-2 border-slate-300 text-slate-500 active:scale-95"
+        aria-label={ariaLabel}
+        className={triggerClassName}
       >
-        ⋯
+        {trigger}
       </button>
       {open && (
         <div role="menu" className="absolute right-0 z-10 mt-1.5 w-52 overflow-hidden rounded-xl border-2 border-navy-900 bg-white shadow-lg">
