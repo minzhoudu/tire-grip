@@ -4,9 +4,8 @@ export interface AdminNavItem {
   badge?: number;
 }
 
-/** Shared between the mobile top tabs (AdminNav) and the desktop sidebar (AdminSidebar). */
-export function getAdminNavItems(slug: string, pending: number, isOwner: boolean): AdminNavItem[] {
-  const base = `/admin/${slug}`;
+/** Shared between the mobile top tabs (AdminNav) and the desktop sidebar (AdminSidebar). `base` comes from getAdminBase(slug). */
+export function getAdminNavItems(base: string, pending: number, isOwner: boolean): AdminNavItem[] {
   return [
     { href: base, label: "Zahtevi", badge: pending },
     { href: `${base}/novi`, label: "+ Novi termin" },

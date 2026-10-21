@@ -12,6 +12,7 @@ import { cancellationMessage, confirmationMessage, rejectionMessage } from "../l
 import { ACTIONS, FINAL_STATUSES, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
 import { whatsappLink } from "../lib/phone.ts";
 import { ADMIN_HORIZON_DAYS } from "./bookings.ts";
+import { shopPublicUrl } from "./origin.ts";
 import { ACTIVE_STATUSES, findOffer, loadBusy, type ShopContext } from "./shops.ts";
 
 export type AdminView = "upcoming" | "history";
@@ -197,7 +198,7 @@ export function customerMessageUrl(
     time: formatMinutes(local.minutes),
     priceRsd: booking.priceRsd,
     address: shop.address,
-    bookingUrl: `${origin}/${shop.slug}`,
+    bookingUrl: shopPublicUrl(shop.slug, origin),
     cancelUrl: kind === "confirm" ? `${origin}/otkazi/${booking.id}` : undefined,
   };
   const text =

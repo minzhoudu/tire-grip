@@ -2,7 +2,7 @@ import { getDb } from "@/db";
 import { SubpageHeader } from "@/components/admin/settings/subpage-header";
 import { ServicesEditor } from "@/components/admin/settings/services-editor";
 import { listServicesForSettings, listVehicleTypesForSettings } from "@/server/settings";
-import { requireOwnerAccess } from "@/server/session";
+import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
 export default async function ServicesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -12,7 +12,7 @@ export default async function ServicesPage({ params }: { params: Promise<{ slug:
 
   return (
     <div className="flex flex-col gap-4">
-      <SubpageHeader slug={slug} title="Usluge i cene" />
+      <SubpageHeader base={await getAdminBase(slug)} title="Usluge i cene" />
       <ServicesEditor slug={slug} services={services} vehicleTypes={vehicleTypes} />
     </div>
   );

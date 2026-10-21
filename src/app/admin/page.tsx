@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { getDb } from "@/db";
 import { listUserShops } from "@/server/accounts";
+import { shopAdminUrl } from "@/server/origin";
 import { requireUser } from "@/server/session";
 import { signOutAction } from "./[slug]/actions";
 
@@ -15,7 +16,7 @@ export default async function AdminHome() {
   const shops = await listUserShops(getDb(), user.id);
 
   const usable = shops.filter((s) => s.signupStatus === "approved" && s.isActive);
-  if (shops.length === 1 && usable.length === 1) redirect(`/admin/${usable[0]!.slug}`);
+  if (shops.length === 1 && usable.length === 1) redirect(shopAdminUrl(usable[0]!.slug));
 
   const pending = shops.filter((s) => s.signupStatus === "pending");
   const rejected = shops.filter((s) => s.signupStatus === "rejected");
@@ -67,7 +68,7 @@ export default async function AdminHome() {
         <ul className="mt-6 flex flex-col gap-3">
           {usable.map((s) => (
             <li key={s.slug}>
-              <Link href={`/admin/${s.slug}`} className="block rounded-2xl border-2 border-navy-900 bg-white p-4 font-semibold active:bg-slate-50">
+              <Link href={shopAdminUrl(s.slug)} className="block rounded-2xl border-2 border-navy-900 bg-white p-4 font-semibold active:bg-slate-50">
                 🛞 {s.name}
               </Link>
             </li>

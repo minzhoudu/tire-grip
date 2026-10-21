@@ -71,7 +71,7 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
         toast(r.error, "error");
         return;
       }
-      router.push(`/admin/${r.slug}`);
+      router.push(r.adminUrl);
     });
   }
 

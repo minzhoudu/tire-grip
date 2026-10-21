@@ -2,7 +2,7 @@ import { getDb } from "@/db";
 import { SubpageHeader } from "@/components/admin/settings/subpage-header";
 import { VehicleTypesEditor } from "@/components/admin/settings/vehicle-types-editor";
 import { listVehicleTypesForSettings } from "@/server/settings";
-import { requireOwnerAccess } from "@/server/session";
+import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
 export default async function VehicleTypesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -11,7 +11,7 @@ export default async function VehicleTypesPage({ params }: { params: Promise<{ s
 
   return (
     <div className="flex flex-col gap-4">
-      <SubpageHeader slug={slug} title="Vrste vozila" />
+      <SubpageHeader base={await getAdminBase(slug)} title="Vrste vozila" />
       <VehicleTypesEditor slug={slug} vehicleTypes={vehicleTypes} />
     </div>
   );

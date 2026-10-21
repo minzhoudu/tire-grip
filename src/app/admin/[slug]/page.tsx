@@ -7,7 +7,7 @@ import { formatMinutes } from "@/lib/availability/zoned";
 import { allowedActions } from "@/lib/booking/status";
 import { customerMessageUrl, listBookings, notifyKindForStatus, type AdminView } from "@/server/admin";
 import { getOrigin } from "@/server/origin";
-import { requireShopAccess } from "@/server/session";
+import { getAdminBase, requireShopAccess } from "@/server/session";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ view?: string }> };
 
@@ -20,7 +20,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const now = new Date();
   const today = shopToday(shop, now);
   const rows = await listBookings(getDb(), shop, view, now);
-  const origin = await getOrigin();
+  const [origin, base] = await Promise.all([getOrigin(), getAdminBase(slug)]);
 
   // Group by local day, keeping the query's order.
   const groups = new Map<string, BookingCardData[]>();
@@ -69,7 +69,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
         ).map(([v, label]) => (
           <Link
             key={v}
-            href={v === "upcoming" ? `/admin/${slug}` : `/admin/${slug}?view=${v}`}
+            href={v === "upcoming" ? base : `${base}?view=${v}`}
             className={`flex-1 rounded-lg py-2 text-center ${view === v ? "bg-navy-900 text-white" : "text-slate-600"}`}
           >
             {label}

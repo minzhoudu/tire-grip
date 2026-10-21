@@ -9,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { getDb } from "../db/index.ts";
 import { shopMembers, shops, type Shop } from "../db/schema.ts";
+import { subdomainOf } from "../lib/subdomain.ts";
 import { getAuth } from "./auth.ts";
 import { getImpersonatedShop, IMPERSONATION_COOKIE } from "./platform.ts";
 
@@ -31,6 +32,17 @@ export async function requireUser(next?: string): Promise<SessionUser> {
   return user;
 }
 
+/**
+ * The admin-panel path prefix for in-app links: "/admin" when we're already on the
+ * shop's own subdomain (middleware maps that back to `/admin/{slug}` internally), or
+ * "/admin/{slug}" on the bare domain (local dev without subdomain, or a fallback visit).
+ * Cached per request since it's read repeatedly while building nav links.
+ */
+export const getAdminBase = cache(async (slug: string): Promise<string> => {
+  const host = (await headers()).get("host");
+  return subdomainOf(host) === slug ? "/admin" : `/admin/${slug}`;
+});
+
 export interface ShopAccess {
   user: SessionUser;
   shop: Shop;
@@ -45,7 +57,7 @@ export interface ShopAccess {
  * otherwise (don't reveal other shops).
  */
 export const requireShopAccess = cache(async (slug: string): Promise<ShopAccess> => {
-  const user = await requireUser(`/admin/${slug}`);
+  const user = await requireUser(await getAdminBase(slug));
   const db = getDb();
   const [row] = await db
     .select({ shop: shops, role: shopMembers.role })

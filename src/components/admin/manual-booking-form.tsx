@@ -18,11 +18,13 @@ const input =
 
 export function ManualBookingForm({
   slug,
+  base,
   services,
   vehicleTypes,
   today,
 }: {
   slug: string;
+  base: string;
   services: PublicService[];
   vehicleTypes: PublicVehicleType[];
   today: string;
@@ -92,7 +94,7 @@ export function ManualBookingForm({
           >
             Još jedan termin
           </button>
-          <Link href={`/admin/${slug}`} className="flex-1 rounded-xl bg-navy-900 px-4 py-3 text-center font-semibold text-white">
+          <Link href={base} className="flex-1 rounded-xl bg-navy-900 px-4 py-3 text-center font-semibold text-white">
             Na zahteve
           </Link>
         </div>

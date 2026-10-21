@@ -14,7 +14,7 @@ const SEASONS = [
   { value: "summer" as const, label: "☀️ Letnje" },
 ];
 
-export function CampaignForm({ slug }: { slug: string }) {
+export function CampaignForm({ slug, base }: { slug: string; base: string }) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState("");
@@ -37,7 +37,7 @@ export function CampaignForm({ slug }: { slug: string }) {
         toast(r.error, "error");
         return;
       }
-      router.push(`/admin/${slug}/podsetnici/${r.id}`);
+      router.push(`${base}/podsetnici/${r.id}`);
     });
   }
 

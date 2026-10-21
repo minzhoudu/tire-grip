@@ -1,12 +1,12 @@
 import { getDb } from "@/db";
 import { SettingsRow } from "@/components/admin/settings/settings-row";
 import { listSettingsSections } from "@/server/settings";
-import { requireOwnerAccess } from "@/server/session";
+import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
 export default async function SettingsHubPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { shop } = await requireOwnerAccess(slug);
-  const sections = await listSettingsSections(getDb(), shop);
+  const sections = await listSettingsSections(getDb(), shop, await getAdminBase(slug));
 
   return (
     <>

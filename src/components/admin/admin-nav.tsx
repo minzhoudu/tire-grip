@@ -4,10 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getAdminNavItems } from "./admin-nav-items";
 
-export function AdminNav({ slug, pending, isOwner }: { slug: string; pending: number; isOwner: boolean }) {
+export function AdminNav({ base, pending, isOwner }: { base: string; pending: number; isOwner: boolean }) {
   const path = usePathname();
-  const base = `/admin/${slug}`;
-  const tabs = getAdminNavItems(slug, pending, isOwner);
+  const tabs = getAdminNavItems(base, pending, isOwner);
   return (
     <nav className="flex gap-1 overflow-x-auto px-2 md:hidden" aria-label="Panel">
       {tabs.map((t) => {

@@ -4,10 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getAdminNavItems } from "./admin-nav-items";
 
-export function AdminSidebar({ slug, pending, isOwner }: { slug: string; pending: number; isOwner: boolean }) {
+export function AdminSidebar({ base, pending, isOwner }: { base: string; pending: number; isOwner: boolean }) {
   const path = usePathname();
-  const base = `/admin/${slug}`;
-  const items = getAdminNavItems(slug, pending, isOwner);
+  const items = getAdminNavItems(base, pending, isOwner);
 
   return (
     <nav className="flex flex-col gap-1" aria-label="Panel">

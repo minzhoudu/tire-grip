@@ -1,7 +1,7 @@
 import { getDb } from "@/db";
 import { SettingsRow } from "@/components/admin/settings/settings-row";
 import { listSettingsSections } from "@/server/settings";
-import { requireOwnerAccess } from "@/server/session";
+import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
 /**
  * Desktop: category list stays visible in a left column while a category's
@@ -17,7 +17,7 @@ export default async function SettingsLayout({
 }) {
   const { slug } = await params;
   const { shop } = await requireOwnerAccess(slug);
-  const sections = await listSettingsSections(getDb(), shop);
+  const sections = await listSettingsSections(getDb(), shop, await getAdminBase(slug));
 
   return (
     <div className="md:flex md:items-start md:gap-6">

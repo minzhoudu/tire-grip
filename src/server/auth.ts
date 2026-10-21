@@ -10,11 +10,9 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { getDb } from "../db/index.ts";
 import * as schema from "../db/schema.ts";
+import { isLiveProduction, PROD_ROOT_DOMAIN as ROOT_DOMAIN } from "../lib/subdomain.ts";
 
 export const MIN_PASSWORD_LENGTH = 10;
-
-/** Must match ROOT_DOMAINS in src/middleware.ts. */
-const ROOT_DOMAIN = "mojvulkanizer.com";
 
 function createAuth() {
   return betterAuth({
@@ -48,9 +46,7 @@ function createAuth() {
     advanced: {
       // Real Vercel production only: local dev and `pnpm start` testing (no VERCEL_ENV)
       // keep ordinary host-only cookies, so neither breaks while this only matters live.
-      ...(process.env.VERCEL_ENV === "production"
-        ? { crossSubDomainCookies: { enabled: true, domain: ROOT_DOMAIN } }
-        : {}),
+      ...(isLiveProduction() ? { crossSubDomainCookies: { enabled: true, domain: ROOT_DOMAIN } } : {}),
     },
     // Must be last: lets server actions set the session cookie.
     plugins: [nextCookies()],

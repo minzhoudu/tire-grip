@@ -451,8 +451,8 @@ export interface SettingsSection {
   subtitle: string;
 }
 
-/** The 5 settings categories with their live one-line summaries — shared by the mobile hub list and the desktop sidebar. */
-export async function listSettingsSections(db: DB, shop: Shop): Promise<SettingsSection[]> {
+/** The 5 settings categories with their live one-line summaries — shared by the mobile hub list and the desktop sidebar. `adminBase` comes from getAdminBase(shop.slug). */
+export async function listSettingsSections(db: DB, shop: Shop, adminBase: string): Promise<SettingsSection[]> {
   const [weeklyHours, exceptions, services, vehicleTypesList] = await Promise.all([
     listWorkingHours(db, shop.id),
     listExceptions(db, shop.id),
@@ -462,7 +462,7 @@ export async function listSettingsSections(db: DB, shop: Shop): Promise<Settings
   const openDays = new Set(weeklyHours.map((h) => h.weekday)).size;
   const activeServices = services.filter((s) => s.isActive).length;
   const activeVehicleTypes = vehicleTypesList.filter((vt) => vt.isActive).length;
-  const base = `/admin/${shop.slug}/podesavanja`;
+  const base = `${adminBase}/podesavanja`;
 
   return [
     {

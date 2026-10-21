@@ -1,47 +1,50 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { subdomainOf } from "./lib/subdomain.ts";
 
 /**
- * Maps `{slug}.mojvulkanizer.com` → `/admin/{slug}` and `platform.mojvulkanizer.com` → `/platforma`,
- * so the admin panel and platform dashboard live on their own subdomains while the customer
- * booking chat stays at the plain `mojvulkanizer.com/{slug}` (unchanged, never rewritten).
+ * `{slug}.mojvulkanizer.com`: `/` → customer booking chat (`/{slug}`), `/admin[/...]` →
+ * the shop's admin panel (`/admin/{slug}[/...]`). `platform.mojvulkanizer.com`: everything
+ * → `/platforma[/...]`. Everything else (root domain, previews, `/otkazi/*`, `/r/*`, `/api/*`)
+ * passes through unchanged.
  *
- * Idempotent on purpose: every existing nav link/redirect in the app already points at
- * `/admin/{slug}/...` or `/platforma` (built before subdomains existed). If this always
- * prepended the prefix, clicking any of those links from a subdomain would double it
- * (`/admin/brzi-tocak/admin/brzi-tocak/...`). Passing through paths that already have the
- * right prefix means none of those existing links needed to change.
+ * Every in-app link is built relative to this (see getAdminBase/shopAdminUrl/shopPublicUrl in
+ * server/session.ts and server/origin.ts) so the address bar never shows the internal
+ * `/admin/{slug}` path once you're already on that shop's own subdomain. The `/admin/{slug}`
+ * idempotent check below is just a safety net for a stray old-style link.
  */
-const ROOT_DOMAINS = ["mojvulkanizer.com", "localhost:3000"];
-
-/** Always served as-is, regardless of host, so sign-in and Better Auth work identically everywhere. */
 const PASSTHROUGH_PREFIXES = ["/prijava", "/registracija", "/api/auth"];
 
 function isPassthrough(pathname: string): boolean {
   return PASSTHROUGH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-/** Subdomain relative to one of ROOT_DOMAINS, or null for the bare/www host, previews, or an unrecognized host. */
-function subdomainOf(host: string): string | null {
-  for (const root of ROOT_DOMAINS) {
-    if (host === root || host === `www.${root}`) return null;
-    if (host.endsWith(`.${root}`)) return host.slice(0, -(root.length + 1));
-  }
-  return null;
+function rewrite(req: NextRequest, pathname: string) {
+  const url = req.nextUrl.clone();
+  url.pathname = pathname;
+  return NextResponse.rewrite(url);
 }
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isPassthrough(pathname)) return NextResponse.next();
 
-  const sub = subdomainOf(req.headers.get("host") ?? "");
+  const sub = subdomainOf(req.headers.get("host"));
   if (!sub) return NextResponse.next();
 
-  const prefix = sub === "platform" ? "/platforma" : `/admin/${sub}`;
-  if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return NextResponse.next();
+  if (sub === "platform") {
+    if (pathname === "/platforma" || pathname.startsWith("/platforma/")) return NextResponse.next();
+    return rewrite(req, `/platforma${pathname}`);
+  }
 
-  const url = req.nextUrl.clone();
-  url.pathname = `${prefix}${pathname}`;
-  return NextResponse.rewrite(url);
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const target = `/admin/${sub}${pathname.slice("/admin".length)}`;
+    if (pathname === target || pathname.startsWith(`${target}/`)) return NextResponse.next();
+    return rewrite(req, target);
+  }
+
+  if (pathname === "/") return rewrite(req, `/${sub}`);
+
+  return NextResponse.next();
 }
 
 export const config = {

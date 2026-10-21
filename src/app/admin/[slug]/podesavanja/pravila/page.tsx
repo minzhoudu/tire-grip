@@ -1,6 +1,6 @@
 import { SubpageHeader } from "@/components/admin/settings/subpage-header";
 import { BookingRulesForm } from "@/components/admin/settings/booking-rules-form";
-import { requireOwnerAccess } from "@/server/session";
+import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
 export default async function BookingRulesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -8,7 +8,7 @@ export default async function BookingRulesPage({ params }: { params: Promise<{ s
 
   return (
     <div className="flex flex-col gap-4">
-      <SubpageHeader slug={slug} title="Pravila zakazivanja" />
+      <SubpageHeader base={await getAdminBase(slug)} title="Pravila zakazivanja" />
       <BookingRulesForm
         slug={slug}
         rules={{

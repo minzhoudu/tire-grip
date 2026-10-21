@@ -9,6 +9,8 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { shopPlan } from "@/db/schema";
+import { isLiveProduction, PROD_ROOT_DOMAIN } from "@/lib/subdomain";
+import { shopAdminUrl } from "@/server/origin";
 import { approveShop, changeShopPlan, IMPERSONATION_COOKIE, logPlatformAction, rejectShop, setShopActive, startImpersonation } from "@/server/platform";
 import { requirePlatformAdmin } from "@/server/session";
 
@@ -69,7 +71,7 @@ export async function changeShopPlanAction(raw: z.input<typeof changePlanInput>)
   return { ok: true };
 }
 
-export type StartImpersonationResult = { ok: true; slug: string } | { ok: false; error: string };
+export type StartImpersonationResult = { ok: true; slug: string; adminUrl: string } | { ok: false; error: string };
 
 /** Grants the platform admin a 1h "Uđi kao" session for this shop and sends them straight into its admin panel. */
 export async function startImpersonationAction(raw: z.input<typeof shopIdInput>): Promise<StartImpersonationResult> {
@@ -86,7 +88,9 @@ export async function startImpersonationAction(raw: z.input<typeof shopIdInput>)
     sameSite: "lax",
     path: "/",
     expires: started.expiresAt,
+    // "Enter as" now lands on the shop's own subdomain — the cookie must travel with it.
+    ...(isLiveProduction() ? { domain: PROD_ROOT_DOMAIN } : {}),
   });
   await logPlatformAction(db, { adminUserId: admin.id, shopId: input.data.shopId, action: "impersonation_started" });
-  return { ok: true, slug: started.shopSlug };
+  return { ok: true, slug: started.shopSlug, adminUrl: shopAdminUrl(started.shopSlug) };
 }

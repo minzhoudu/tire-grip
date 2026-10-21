@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getDb } from "@/db";
 import { CampaignForm } from "@/components/admin/reminders/campaign-form";
 import { listCampaigns } from "@/server/reminders";
-import { requireOwnerAccess } from "@/server/session";
+import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
 const SEASON_ICON: Record<string, string> = { winter: "❄️", summer: "☀️" };
 const STATUS_LABEL: Record<string, string> = { draft: "Priprema", active: "U toku", done: "Završena" };
@@ -15,7 +15,7 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function RemindersPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { shop } = await requireOwnerAccess(slug);
-  const campaigns = await listCampaigns(getDb(), shop.id);
+  const [campaigns, base] = await Promise.all([listCampaigns(getDb(), shop.id), getAdminBase(slug)]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -28,7 +28,7 @@ export default async function RemindersPage({ params }: { params: Promise<{ slug
         <ul className="flex flex-col gap-2">
           {campaigns.map((c) => (
             <li key={c.id}>
-              <Link href={`/admin/${slug}/podsetnici/${c.id}`} className="block rounded-2xl border-2 border-navy-900 bg-white p-4 active:scale-[0.99]">
+              <Link href={`${base}/podsetnici/${c.id}`} className="block rounded-2xl border-2 border-navy-900 bg-white p-4 active:scale-[0.99]">
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-semibold">
                     {SEASON_ICON[c.season]} {c.name}
@@ -46,7 +46,7 @@ export default async function RemindersPage({ params }: { params: Promise<{ slug
         </ul>
       )}
 
-      <CampaignForm slug={slug} />
+      <CampaignForm slug={slug} base={base} />
     </div>
   );
 }

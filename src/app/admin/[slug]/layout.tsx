@@ -5,7 +5,8 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { ToastProvider } from "@/components/ui/toast";
 import { countPending } from "@/server/admin";
-import { requireShopAccess } from "@/server/session";
+import { getOrigin, shopPublicUrl } from "@/server/origin";
+import { getAdminBase, requireShopAccess } from "@/server/session";
 import { endImpersonationAction, signOutAction } from "./actions";
 
 export const metadata: Metadata = { title: "Panel · Tire Grip", robots: { index: false } };
@@ -20,7 +21,8 @@ export default async function AdminShopLayout({
   await connection();
   const { slug } = await params;
   const { shop, user, role, isImpersonating } = await requireShopAccess(slug);
-  const pending = await countPending(getDb(), shop);
+  const [pending, base, origin] = await Promise.all([countPending(getDb(), shop), getAdminBase(slug), getOrigin()]);
+  const publicUrl = shopPublicUrl(shop.slug, origin);
 
   return (
     <ToastProvider>
@@ -32,11 +34,11 @@ export default async function AdminShopLayout({
             <p className="truncate text-xs text-slate-300">{user.name}</p>
           </div>
           <div className="flex-1 px-3">
-            <AdminSidebar slug={shop.slug} pending={pending} isOwner={role === "owner"} />
+            <AdminSidebar base={base} pending={pending} isOwner={role === "owner"} />
           </div>
           <div className="flex flex-col gap-2 p-4">
             <a
-              href={`/${shop.slug}`}
+              href={publicUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-full bg-white/10 px-3 py-2 text-center text-xs font-semibold"
@@ -65,7 +67,7 @@ export default async function AdminShopLayout({
                 <p className="truncate text-xs text-slate-300">{user.name}</p>
               </div>
               <a
-                href={`/${shop.slug}`}
+                href={publicUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold whitespace-nowrap"
@@ -76,7 +78,7 @@ export default async function AdminShopLayout({
                 <button className="rounded-full px-2 py-1.5 text-xs text-slate-300 hover:text-white">Odjava</button>
               </form>
             </div>
-            <AdminNav slug={shop.slug} pending={pending} isOwner={role === "owner"} />
+            <AdminNav base={base} pending={pending} isOwner={role === "owner"} />
             <div className="hazard-stripe" />
           </header>
           <div className="flex-1 px-3 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))] md:px-10 md:pt-10">
