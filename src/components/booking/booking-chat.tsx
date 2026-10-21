@@ -230,6 +230,7 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
                   when: `${slots.state === "ready" ? slots.data.dayLabel : flow.date} u ${flow.slot.time}h`,
                   price: price ? formatRsd(price.priceRsd) : "",
                 }}
+                showReminderConsent={service.kind === "seasonal_swap"}
                 onBack={() => dispatch({ type: "back" })}
                 onSubmit={async (fields) => {
                   const result = await submitBookingAction({
@@ -576,11 +577,14 @@ type Fields = { name: string; phone: string; vehicleLabel: string; note: string;
 function DetailsForm({
   flow,
   summary,
+  showReminderConsent,
   onBack,
   onSubmit,
 }: {
   flow: FlowState;
   summary: { service: string; vehicle: string; when: string; price: string };
+  /** Only the seasonal tire-swap reminder applies — hide the checkbox for every other service kind. */
+  showReminderConsent: boolean;
   onBack: () => void;
   onSubmit: (fields: Fields) => Promise<Record<string, string> | null>;
 }) {
@@ -665,15 +669,17 @@ function DetailsForm({
         />
       </Field>
 
-      <label className="mt-4 flex items-start gap-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          className="mt-0.5 size-5 shrink-0 accent-navy-900"
-          checked={fields.reminderConsent}
-          onChange={(e) => set("reminderConsent", e.target.checked)}
-        />
-        <span>Podsetite me pred sledeću sezonu zamene guma (možete se odjaviti bilo kada).</span>
-      </label>
+      {showReminderConsent && (
+        <label className="mt-4 flex items-start gap-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-5 shrink-0 accent-navy-900"
+            checked={fields.reminderConsent}
+            onChange={(e) => set("reminderConsent", e.target.checked)}
+          />
+          <span>Podsetite me pred sledeću sezonu zamene guma (možete se odjaviti bilo kada).</span>
+        </label>
+      )}
 
       {errors.form && <Notice>{errors.form}</Notice>}
 
