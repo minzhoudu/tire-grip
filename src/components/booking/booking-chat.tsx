@@ -1,13 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useReducer, useRef, useState, useTransition } from "react";
 import {
   getDaysAction,
   getSlotsAction,
+  lookupMyBookingsAction,
   submitBookingAction,
   type BookingConfirmation,
   type DayOption,
+  type MyBooking,
   type SlotOption,
 } from "@/app/[slug]/actions";
 import { formatRsd } from "@/lib/availability/labels";
@@ -33,6 +34,24 @@ type Load<T> = { state: "idle" } | { state: "loading" } | { state: "error" } | {
 /** Must match DAYS_PAGE_SIZE in src/app/[slug]/actions.ts — how many day chips "Sledeći dani" advances by. */
 const DAYS_PAGE_SIZE = 6;
 
+const LOOKUP_STATUS_LABEL: Record<string, string> = {
+  pending: "Čeka potvrdu",
+  confirmed: "Potvrđeno",
+  completed: "Završeno",
+  cancelled: "Otkazano",
+  rejected: "Odbijeno",
+  no_show: "Niste došli",
+};
+
+const LOOKUP_STATUS_STYLE: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-900",
+  confirmed: "bg-emerald-100 text-emerald-900",
+  completed: "bg-slate-200 text-slate-600",
+  cancelled: "bg-slate-200 text-slate-600",
+  rejected: "bg-red-100 text-red-800",
+  no_show: "bg-red-100 text-red-800",
+};
+
 export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderToken?: string }) {
   const [flow, dispatch] = useReducer(flowReducer, initialFlow);
   const [days, setDays] = useState<Load<{ days: DayOption[]; hasMore: boolean }>>({ state: "idle" });
@@ -41,6 +60,34 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
   const [confirmation, setConfirmation] = useState<BookingConfirmation | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // "Pogledajte svoje termine" — a small side flow, independent of the booking wizard above.
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupPhone, setLookupPhone] = useState("");
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupResult, setLookupResult] = useState<MyBooking[] | "not_found" | null>(null);
+  const [lookupPending, startLookupTransition] = useTransition();
+
+  function submitLookup(e: React.FormEvent) {
+    e.preventDefault();
+    setLookupError(null);
+    startLookupTransition(async () => {
+      const r = await lookupMyBookingsAction({ slug: shop.slug, phone: lookupPhone });
+      if (!r.ok) {
+        if (r.reason === "not_found") setLookupResult("not_found");
+        else setLookupError("Unesite ispravan broj telefona.");
+        return;
+      }
+      setLookupResult(r.bookings);
+    });
+  }
+
+  function closeLookup() {
+    setLookupOpen(false);
+    setLookupPhone("");
+    setLookupError(null);
+    setLookupResult(null);
+  }
 
   const service = shop.services.find((s) => s.id === flow.serviceId) ?? null;
   const price = service?.prices.find((p) => p.vehicleTypeId === flow.vehicleTypeId) ?? null;
@@ -83,7 +130,7 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [flow, days, slots, confirmation]);
+  }, [flow, days, slots, confirmation, lookupOpen, lookupResult]);
 
   const bookable = shop.services.filter((s) => s.bookable && s.prices.length > 0);
   const retry = () => setReloadKey((k) => k + 1);
@@ -117,13 +164,13 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
             👋 Dobrodošli u <strong>{shop.name}</strong>!
           </p>
           <p className="mt-2">Zakažite termin za 30 sekundi, bez zvanja i bez čekanja u redu.</p>
-          {flow.step === "service" && (
+          {flow.step === "service" && !lookupOpen && (
             <>
               <p className="mt-2 text-sm text-slate-500">
                 Već imate zakazan termin?{" "}
-                <Link href={`/${shop.slug}/moji-termini`} className="font-semibold text-navy-700 underline">
+                <button type="button" onClick={() => setLookupOpen(true)} className="font-semibold text-navy-700 underline">
                   Pogledajte svoje termine
-                </Link>
+                </button>
               </p>
               <Chips>
                 {shop.services.map((s) => (
@@ -147,6 +194,79 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
             </>
           )}
         </Bot>
+
+        {lookupOpen && (
+          <>
+            <User>🔎 Pogledajte svoje termine</User>
+            <Bot>
+              {lookupResult === null ? (
+                <form onSubmit={submitLookup} className="flex flex-col gap-2.5">
+                  <p>Unesite broj telefona da pronađemo vaše termine:</p>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    autoFocus
+                    placeholder="06x xxx xxxx"
+                    value={lookupPhone}
+                    onChange={(e) => setLookupPhone(e.target.value)}
+                    className={inputClass(lookupError ?? undefined)}
+                  />
+                  {lookupError && <span className="text-sm text-red-700">{lookupError}</span>}
+                  <div className="mt-1 flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={lookupPending}
+                      className="flex-1 rounded-xl border-2 border-navy-900 bg-accent-500 px-4 py-2.5 font-mono text-[15px] font-bold text-navy-950 active:scale-[0.98] disabled:opacity-60"
+                    >
+                      {lookupPending ? "Tražim…" : "🔎 Pronađi"}
+                    </button>
+                    <BackChip onClick={closeLookup} label="Otkaži" />
+                  </div>
+                </form>
+              ) : lookupResult === "not_found" ? (
+                <>
+                  <Notice>Nema termina sa tim brojem telefona kod ove radnje.</Notice>
+                  <Chips>
+                    <Chip onClick={() => setLookupResult(null)}>🔁 Probaj drugi broj</Chip>
+                    <BackChip onClick={closeLookup} />
+                  </Chips>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold">Vaši termini:</p>
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {lookupResult.map((b) => (
+                      <li key={b.id} className="rounded-xl border border-slate-200 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-mono font-bold">
+                              {b.dayLabel} u {b.time}h
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              {b.serviceIcon} {b.serviceName} · {formatRsd(b.priceRsd)}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${LOOKUP_STATUS_STYLE[b.status]}`}>
+                            {LOOKUP_STATUS_LABEL[b.status]}
+                          </span>
+                        </div>
+                        {b.upcoming && (
+                          <a href={`/otkazi/${b.id}`} className="mt-2 inline-block text-sm font-semibold text-red-700 underline">
+                            Otkaži termin
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <Chips>
+                    <BackChip onClick={closeLookup} />
+                  </Chips>
+                </>
+              )}
+            </Bot>
+          </>
+        )}
 
         {flow.showPrices && (
           <Bot>
