@@ -38,7 +38,9 @@ export function SettingsRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className={`font-semibold ${active ? "text-navy-950" : "text-slate-900"}`}>{title}</p>
-        <p className={`truncate text-sm ${incomplete ? "font-semibold text-amber-700" : active ? "text-navy-900/70" : "text-slate-500"}`}>
+        <p
+          className={`text-sm ${incomplete ? "font-semibold text-amber-700" : `truncate ${active ? "text-navy-900/70" : "text-slate-500"}`}`}
+        >
           {subtitle}
         </p>
       </div>
