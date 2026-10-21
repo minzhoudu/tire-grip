@@ -4,18 +4,21 @@
  * and the audit log every mutation writes to.
  */
 import "dotenv/config";
+import { hashPassword, verifyPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
-import { platformAuditLog, platformImpersonationSessions, shopMembers, shops, users } from "../src/db/schema.ts";
+import { accounts, platformAuditLog, platformImpersonationSessions, shopMembers, shops, users } from "../src/db/schema.ts";
 import {
   approveShop,
   changeShopPlan,
   endImpersonation,
   getImpersonatedShop,
   listAllShops,
+  listAllUsers,
   logPlatformAction,
   rejectShop,
+  resetUserPassword,
   setShopActive,
   startImpersonation,
 } from "../src/server/platform.ts";
@@ -70,6 +73,31 @@ describe.skipIf(!process.env.DATABASE_URL)("platform dashboard (Postgres)", () =
     const approved = rows.find((r) => r.id === approvedShopId);
     expect(pending).toMatchObject({ signupStatus: "pending", isActive: false, bookingCount: 0, ownerName: null });
     expect(approved).toMatchObject({ signupStatus: "approved", isActive: true, bookingCount: 0, ownerName: "Vlasnik radnje" });
+  });
+
+  it("lists users with the shop(s) and role they belong to", async () => {
+    const db = getDb();
+    const rows = await listAllUsers(db);
+    const owner = rows.find((r) => r.id === adminUserId);
+    const platformAdmin = rows.find((r) => r.id === platformAdminUserId);
+    expect(owner?.shops).toEqual([{ slug: approvedSlug, shopName: "IT Platforma Approved", role: "owner" }]);
+    expect(platformAdmin?.shops).toEqual([]);
+  });
+
+  it("resets a user's password credential", async () => {
+    const db = getDb();
+    const oldHash = await hashPassword("stara-lozinka-123");
+    await db.insert(accounts).values({ id: `it-account-${run}`, accountId: adminUserId, providerId: "credential", userId: adminUserId, password: oldHash });
+
+    expect(await resetUserPassword(db, adminUserId, "nova-lozinka-456")).toBe(true);
+    const [row] = await db.select({ password: accounts.password }).from(accounts).where(eq(accounts.userId, adminUserId));
+    expect(await verifyPassword({ hash: row!.password!, password: "nova-lozinka-456" })).toBe(true);
+    expect(await verifyPassword({ hash: row!.password!, password: "stara-lozinka-123" })).toBe(false);
+
+    // no credential account for this user → nothing to update
+    expect(await resetUserPassword(db, platformAdminUserId, "nova-lozinka-456")).toBe(false);
+
+    await db.delete(accounts).where(eq(accounts.userId, adminUserId));
   });
 
   it("approves a pending shop, and a second approve attempt is a no-op", async () => {

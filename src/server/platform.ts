@@ -4,9 +4,10 @@
  * changing their plan. Every mutation is logged to platform_audit_log —
  * never silent, since these actions touch other businesses' access.
  */
+import { hashPassword } from "better-auth/crypto";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
-import { bookings, platformAuditLog, platformImpersonationSessions, shopMembers, shops, users, type Shop } from "../db/schema.ts";
+import { accounts, bookings, platformAuditLog, platformImpersonationSessions, shopMembers, shops, users, type Shop } from "../db/schema.ts";
 
 /** Cookie that carries the active impersonation session's id. Shared by the action that sets it and the session check that reads it. */
 export const IMPERSONATION_COOKIE = "impersonation_session";
@@ -57,6 +58,43 @@ export async function listAllShops(db: DB): Promise<PlatformShopRow[]> {
       bookingCount: countByShop.get(s.id) ?? 0,
     };
   });
+}
+
+export interface PlatformUserRow {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: Date;
+  shops: { slug: string; shopName: string; role: "owner" | "staff" }[];
+}
+
+/** Every account on the platform, with the shop(s) it belongs to — for the platform admin's support tooling. */
+export async function listAllUsers(db: DB): Promise<PlatformUserRow[]> {
+  const [userRows, memberRows] = await Promise.all([
+    db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt)),
+    db
+      .select({ userId: shopMembers.userId, role: shopMembers.role, slug: shops.slug, shopName: shops.name })
+      .from(shopMembers)
+      .innerJoin(shops, eq(shops.id, shopMembers.shopId)),
+  ]);
+  const shopsByUser = new Map<string, PlatformUserRow["shops"]>();
+  for (const m of memberRows) {
+    const list = shopsByUser.get(m.userId) ?? [];
+    list.push({ slug: m.slug, shopName: m.shopName, role: m.role });
+    shopsByUser.set(m.userId, list);
+  }
+  return userRows.map((u) => ({ ...u, shops: shopsByUser.get(u.id) ?? [] }));
+}
+
+/** Resets the email+password credential for support ("forgot my password"). False if the account has none (shouldn't happen — every account here was created with one). */
+export async function resetUserPassword(db: DB, userId: string, newPassword: string): Promise<boolean> {
+  const hash = await hashPassword(newPassword);
+  const rows = await db
+    .update(accounts)
+    .set({ password: hash })
+    .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "credential")))
+    .returning({ id: accounts.id });
+  return rows.length > 0;
 }
 
 export async function logPlatformAction(

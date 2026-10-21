@@ -10,8 +10,18 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { shopPlan } from "@/db/schema";
 import { isLiveProduction, PROD_ROOT_DOMAIN } from "@/lib/subdomain";
+import { MIN_PASSWORD_LENGTH } from "@/server/auth";
 import { shopAdminUrl } from "@/server/origin";
-import { approveShop, changeShopPlan, IMPERSONATION_COOKIE, logPlatformAction, rejectShop, setShopActive, startImpersonation } from "@/server/platform";
+import {
+  approveShop,
+  changeShopPlan,
+  IMPERSONATION_COOKIE,
+  logPlatformAction,
+  rejectShop,
+  resetUserPassword,
+  setShopActive,
+  startImpersonation,
+} from "@/server/platform";
 import { requirePlatformAdmin } from "@/server/session";
 
 const shopIdInput = z.object({ shopId: z.uuid() });
@@ -93,4 +103,17 @@ export async function startImpersonationAction(raw: z.input<typeof shopIdInput>)
   });
   await logPlatformAction(db, { adminUserId: admin.id, shopId: input.data.shopId, action: "impersonation_started" });
   return { ok: true, slug: started.shopSlug, adminUrl: shopAdminUrl(started.shopSlug) };
+}
+
+const resetPasswordInput = z.object({ userId: z.string().min(1), newPassword: z.string().min(MIN_PASSWORD_LENGTH) });
+
+/** Support tooling: set a new password for an owner/staff account that forgot theirs. */
+export async function resetUserPasswordAction(raw: z.input<typeof resetPasswordInput>): Promise<PlatformActionResult> {
+  const input = resetPasswordInput.safeParse(raw);
+  if (!input.success) return { ok: false, error: `Lozinka mora imati bar ${MIN_PASSWORD_LENGTH} karaktera.` };
+  const admin = await requirePlatformAdmin();
+  const ok = await resetUserPassword(getDb(), input.data.userId, input.data.newPassword);
+  if (!ok) return { ok: false, error: "Nalog nije pronađen." };
+  await logPlatformAction(getDb(), { adminUserId: admin.id, action: "password_reset", details: `userId=${input.data.userId}` });
+  return { ok: true };
 }
