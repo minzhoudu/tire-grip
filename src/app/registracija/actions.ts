@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { fieldErrors } from "@/lib/booking/request";
-import { slugPattern, signupRequestSchema, type SignupRequestInput } from "@/lib/signup/request";
+import { signupRequestSchema, type SignupRequestInput } from "@/lib/signup/request";
 import { getAuth } from "@/server/auth";
 import { isSlugAvailable, registerShop } from "@/server/signup";
 
@@ -34,7 +34,7 @@ export async function registerShopAction(raw: SignupRequestInput): Promise<Regis
   redirect("/admin");
 }
 
-const slugInput = z.object({ slug: z.string().trim().min(2).max(60).regex(slugPattern) });
+const slugInput = z.object({ slug: signupRequestSchema.shape.slug });
 
 export async function checkSlugAction(raw: z.input<typeof slugInput>): Promise<{ available: boolean }> {
   const input = slugInput.safeParse(raw);

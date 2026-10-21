@@ -10,6 +10,9 @@ export const MIN_PASSWORD_LENGTH = 10;
 
 export const slugPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+/** Reserved for the app itself — {slug}.mojvulkanizer.com would otherwise collide with these. */
+const RESERVED_SLUGS = new Set(["platform", "www", "admin", "api"]);
+
 export const signupRequestSchema = z.object({
   shopName: z.string().trim().min(2, "Unesite naziv radnje").max(80, "Naziv je predugačak"),
   slug: z
@@ -17,7 +20,8 @@ export const signupRequestSchema = z.object({
     .trim()
     .min(2, "Prekratko")
     .max(60, "Predugačko")
-    .regex(slugPattern, "Samo mala slova, brojevi i crtice (npr. brzi-tocak)"),
+    .regex(slugPattern, "Samo mala slova, brojevi i crtice (npr. brzi-tocak)")
+    .refine((s) => !RESERVED_SLUGS.has(s), "Ova adresa je rezervisana, izaberite drugu."),
   city: z.string().trim().max(80).optional().default(""),
   ownerName: z.string().trim().min(2, "Unesite ime").max(60, "Ime je predugačko"),
   email: z.email("Unesite ispravan email"),

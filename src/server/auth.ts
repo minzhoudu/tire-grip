@@ -13,11 +13,28 @@ import * as schema from "../db/schema.ts";
 
 export const MIN_PASSWORD_LENGTH = 10;
 
+/** Must match ROOT_DOMAINS in src/middleware.ts. */
+const ROOT_DOMAIN = "mojvulkanizer.com";
+
 function createAuth() {
   return betterAuth({
     appName: "Tire Grip",
     secret: process.env.BETTER_AUTH_SECRET,
-    baseURL: process.env.BETTER_AUTH_URL,
+    // Object form (not a single string) so the same deployment answers correctly on the
+    // bare domain, platform.<domain>, and every {slug}.<domain> admin subdomain.
+    baseURL: {
+      allowedHosts: [
+        ROOT_DOMAIN,
+        `www.${ROOT_DOMAIN}`,
+        `platform.${ROOT_DOMAIN}`,
+        `*.${ROOT_DOMAIN}`,
+        "localhost:3000",
+        "*.localhost:3000",
+      ],
+      protocol: "auto",
+      fallback: process.env.BETTER_AUTH_URL ?? `https://${ROOT_DOMAIN}`,
+    },
+    trustedOrigins: [`https://${ROOT_DOMAIN}`, `https://*.${ROOT_DOMAIN}`],
     database: drizzleAdapter(getDb(), { provider: "pg", schema, usePlural: true }),
     emailAndPassword: {
       enabled: true,
@@ -27,6 +44,13 @@ function createAuth() {
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days: owners stay signed in on their phone
       updateAge: 60 * 60 * 24, // refresh the expiry at most once a day
+    },
+    advanced: {
+      // Real Vercel production only: local dev and `pnpm start` testing (no VERCEL_ENV)
+      // keep ordinary host-only cookies, so neither breaks while this only matters live.
+      ...(process.env.VERCEL_ENV === "production"
+        ? { crossSubDomainCookies: { enabled: true, domain: ROOT_DOMAIN } }
+        : {}),
     },
     // Must be last: lets server actions set the session cookie.
     plugins: [nextCookies()],
