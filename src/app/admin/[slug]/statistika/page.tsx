@@ -1,5 +1,7 @@
 import { getDb } from "@/db";
+import { PlanUpgradeNotice } from "@/components/admin/plan-upgrade-notice";
 import { formatRsd } from "@/lib/availability/labels";
+import { hasFeature } from "@/lib/plan";
 import { getShopStats } from "@/server/stats";
 import { requireOwnerAccess } from "@/server/session";
 
@@ -14,6 +16,18 @@ function shortDate(date: string): string {
 export default async function StatsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { shop } = await requireOwnerAccess(slug);
+
+  if (!hasFeature(shop.plan, "statistika")) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="px-1">
+          <h1 className="font-mono text-xl font-bold">Statistika</h1>
+        </div>
+        <PlanUpgradeNotice feature="Statistika" />
+      </div>
+    );
+  }
+
   const stats = await getShopStats(getDb(), shop);
 
   const maxWeekCount = Math.max(1, ...stats.weeks.map((w) => w.count));

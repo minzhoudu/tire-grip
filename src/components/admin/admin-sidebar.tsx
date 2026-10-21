@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Shop } from "@/db/schema";
 import { getAdminNavItems } from "./admin-nav-items";
 
-export function AdminSidebar({ base, pending, isOwner }: { base: string; pending: number; isOwner: boolean }) {
+export function AdminSidebar({ base, pending, isOwner, plan }: { base: string; pending: number; isOwner: boolean; plan: Shop["plan"] }) {
   const path = usePathname();
-  const items = getAdminNavItems(base, pending, isOwner);
+  const items = getAdminNavItems(base, pending, isOwner, plan);
 
   return (
     <nav className="flex flex-col gap-1" aria-label="Panel">

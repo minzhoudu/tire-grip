@@ -48,7 +48,7 @@ export default async function AdminShopLayout({
             {!isImpersonating && <ShopSwitcher otherShops={otherShops} addShopUrl={newShopUrl} />}
           </div>
           <div className="flex-1 px-3">
-            <AdminSidebar base={base} pending={pending} isOwner={role === "owner"} />
+            <AdminSidebar base={base} pending={pending} isOwner={role === "owner"} plan={shop.plan} />
           </div>
           <div className="flex flex-col gap-2 p-4">
             <a
@@ -89,11 +89,8 @@ export default async function AdminShopLayout({
               >
                 Stranica za kupce ↗
               </a>
-              <form action={signOutAction}>
-                <button className="rounded-full px-2 py-1.5 text-xs text-slate-300 hover:text-white">Odjava</button>
-              </form>
             </div>
-            <AdminNav base={base} pending={pending} isOwner={role === "owner"} />
+            <AdminNav base={base} pending={pending} isOwner={role === "owner"} plan={shop.plan} signOutAction={signOutAction} />
             <div className="hazard-stripe" />
           </header>
           <div className="flex-1 px-3 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))] md:px-10 md:pt-10">

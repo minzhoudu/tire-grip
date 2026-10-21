@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getDb } from "@/db";
 import { CampaignForm } from "@/components/admin/reminders/campaign-form";
+import { PlanUpgradeNotice } from "@/components/admin/plan-upgrade-notice";
+import { hasFeature } from "@/lib/plan";
 import { listCampaigns } from "@/server/reminders";
 import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
@@ -15,6 +17,18 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function RemindersPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { shop } = await requireOwnerAccess(slug);
+
+  if (!hasFeature(shop.plan, "podsetnici")) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="px-1">
+          <h1 className="font-mono text-xl font-bold">Podsetnici</h1>
+        </div>
+        <PlanUpgradeNotice feature="Podsetnici" />
+      </div>
+    );
+  }
+
   const [campaigns, base] = await Promise.all([listCampaigns(getDb(), shop.id), getAdminBase(slug)]);
 
   return (

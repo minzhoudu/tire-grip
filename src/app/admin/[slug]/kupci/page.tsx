@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getDb } from "@/db";
+import { PlanUpgradeNotice } from "@/components/admin/plan-upgrade-notice";
 import { formatPhone } from "@/lib/phone";
+import { hasFeature } from "@/lib/plan";
 import { listShopCustomers } from "@/server/customers";
 import { getAdminBase, requireShopAccess } from "@/server/session";
 
@@ -17,6 +19,18 @@ function visitLabel(n: number): string {
 export default async function CustomersPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { shop } = await requireShopAccess(slug);
+
+  if (!hasFeature(shop.plan, "kupci")) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="px-1">
+          <h1 className="font-mono text-xl font-bold">Kupci</h1>
+        </div>
+        <PlanUpgradeNotice feature="Kupci" />
+      </div>
+    );
+  }
+
   const [customers, base] = await Promise.all([listShopCustomers(getDb(), shop.id), getAdminBase(slug)]);
 
   return (

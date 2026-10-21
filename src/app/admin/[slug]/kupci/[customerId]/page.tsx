@@ -5,6 +5,7 @@ import { BookingCard, type BookingCardData } from "@/components/admin/booking-ca
 import { dayLongLabel, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
 import { allowedActions } from "@/lib/booking/status";
+import { hasFeature } from "@/lib/plan";
 import { customerMessageUrl, listCustomerBookings, notifyKindForStatus } from "@/server/admin";
 import { getShopCustomer } from "@/server/customers";
 import { getOrigin } from "@/server/origin";
@@ -13,6 +14,7 @@ import { getAdminBase, requireShopAccess } from "@/server/session";
 export default async function CustomerHistoryPage({ params }: { params: Promise<{ slug: string; customerId: string }> }) {
   const { slug, customerId } = await params;
   const { shop } = await requireShopAccess(slug);
+  if (!hasFeature(shop.plan, "kupci")) notFound();
   const db = getDb();
   const [customer, rows, origin, base] = await Promise.all([
     getShopCustomer(db, shop.id, customerId),

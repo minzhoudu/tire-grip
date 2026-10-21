@@ -4,6 +4,7 @@ import { GenerateQueueButton } from "@/components/admin/reminders/generate-queue
 import { SendQueue } from "@/components/admin/reminders/send-queue";
 import { reminderMessage } from "@/lib/booking/messages";
 import { whatsappLink } from "@/lib/phone";
+import { hasFeature } from "@/lib/plan";
 import { getOrigin } from "@/server/origin";
 import { listCampaigns, listTodayQueue, previewAudience } from "@/server/reminders";
 import { requireOwnerAccess } from "@/server/session";
@@ -13,6 +14,7 @@ const SEASON_ICON: Record<string, string> = { winter: "❄️", summer: "☀️"
 export default async function CampaignPage({ params }: { params: Promise<{ slug: string; campaignId: string }> }) {
   const { slug, campaignId } = await params;
   const { shop } = await requireOwnerAccess(slug);
+  if (!hasFeature(shop.plan, "podsetnici")) notFound();
   const campaigns = await listCampaigns(getDb(), shop.id);
   const campaign = campaigns.find((c) => c.id === campaignId);
   if (!campaign) notFound();
