@@ -5,7 +5,8 @@ import { BookingCard, type BookingCardData } from "@/components/admin/booking-ca
 import { dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
 import { allowedActions } from "@/lib/booking/status";
-import { listBookings, type AdminView } from "@/server/admin";
+import { customerMessageUrl, listBookings, notifyKindForStatus, type AdminView } from "@/server/admin";
+import { getOrigin } from "@/server/origin";
 import { requireShopAccess } from "@/server/session";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ view?: string }> };
@@ -19,12 +20,14 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const now = new Date();
   const today = shopToday(shop, now);
   const rows = await listBookings(getDb(), shop, view, now);
+  const origin = await getOrigin();
 
   // Group by local day, keeping the query's order.
   const groups = new Map<string, BookingCardData[]>();
   for (const b of rows) {
     const start = utcToZoned(b.startsAt, shop.timezone);
     const end = utcToZoned(b.endsAt, shop.timezone);
+    const notifyKind = b.notifiedAt === null ? notifyKindForStatus(b.status) : null;
     const card: BookingCardData = {
       id: b.id,
       status: b.status,
@@ -41,6 +44,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       bay: shop.bays > 1 ? b.bay : null,
       byPhone: b.source === "admin",
       cancelReason: b.cancelReason,
+      notifyUrl: notifyKind ? customerMessageUrl(b, shop, notifyKind, origin) : null,
     };
     const list = groups.get(start.date) ?? [];
     list.push(card);

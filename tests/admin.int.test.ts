@@ -20,6 +20,7 @@ import {
   deleteBlock,
   listBookings,
   listUpcomingBlocks,
+  markNotified,
 } from "../src/server/admin.ts";
 import { getAuth } from "../src/server/auth.ts";
 import { createBookingRequest } from "../src/server/bookings.ts";
@@ -144,6 +145,26 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
     const [row] = await db.select().from(bookings).where(eq(bookings.id, id));
     expect(row!.confirmedAt).not.toBeNull();
     expect(row!.completedAt).not.toBeNull();
+  });
+
+  it("tracks whether the customer was told about the current status, resetting on each new confirm/reject/cancel", async () => {
+    const db = getDb();
+    const r = await createBookingRequest(db, request({ phone: "064 700 0009" }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const id = r.booking.id;
+
+    const confirmed = await changeBookingStatus(db, { shopId, bookingId: id, action: "confirm" });
+    expect(confirmed.ok && confirmed.booking.notifiedAt).toBeNull(); // fresh status, not yet told
+
+    expect(await markNotified(db, shopId, id)).toBe(true);
+    expect(await markNotified(db, shopId, id)).toBe(false); // already notified, no double-count
+    const [afterSend] = await db.select().from(bookings).where(eq(bookings.id, id));
+    expect(afterSend!.notifiedAt).not.toBeNull();
+
+    // a new notify-worthy action (cancel) means the customer hasn't heard about *this* status yet
+    const cancelled = await changeBookingStatus(db, { shopId, bookingId: id, action: "cancel" });
+    expect(cancelled.ok && cancelled.booking.notifiedAt).toBeNull();
   });
 
   it("cancelling frees the slot and moves the booking to history", async () => {

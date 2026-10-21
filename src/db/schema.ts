@@ -443,6 +443,8 @@ export const bookings = pgTable(
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    /** When the shop actually sent the customer the confirm/reject/cancel message — null after a status change the shop hasn't notified the customer about yet. */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

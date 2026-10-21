@@ -8,8 +8,7 @@ export function AutoRefresh({ seconds }: { seconds: number }) {
   const router = useRouter();
   useEffect(() => {
     const refresh = () => {
-      // A card waiting for "send WhatsApp" sets data-hold-refresh so it isn't refreshed away.
-      if (document.visibilityState === "visible" && !document.body.dataset.holdRefresh) router.refresh();
+      if (document.visibilityState === "visible") router.refresh();
     };
     const id = window.setInterval(refresh, seconds * 1000);
     document.addEventListener("visibilitychange", refresh);

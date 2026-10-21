@@ -43,6 +43,13 @@
       "when": 1792534651857,
       "tag": "0005_drop_vehicle_type_enum",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792576786612,
+      "tag": "0006_add_booking_notified_at",
+      "breakpoints": true
     }
   ]
 }

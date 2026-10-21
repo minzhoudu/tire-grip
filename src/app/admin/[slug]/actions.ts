@@ -8,13 +8,19 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { dayLongLabel, utcToZoned } from "@/lib/availability";
-import { formatMinutes, parseTime } from "@/lib/availability/zoned";
-import { cancellationMessage, confirmationMessage, rejectionMessage } from "@/lib/booking/messages";
+import { dayLongLabel } from "@/lib/availability";
+import { parseTime } from "@/lib/availability/zoned";
 import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/lib/booking/request";
 import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "@/lib/booking/status";
-import { whatsappLink } from "@/lib/phone";
-import { adminDaySlots, changeBookingStatus, createBlock, deleteBlock, getBooking, type AdminBooking } from "@/server/admin";
+import {
+  adminDaySlots,
+  changeBookingStatus,
+  createBlock,
+  customerMessageUrl,
+  deleteBlock,
+  getBooking,
+  markNotified,
+} from "@/server/admin";
 import { getAuth } from "@/server/auth";
 import { createBookingRequest } from "@/server/bookings";
 import { getOrigin } from "@/server/origin";
@@ -23,28 +29,6 @@ import { requireShopAccess, requireUser } from "@/server/session";
 import { loadShopContext } from "@/server/shops";
 
 const slugSchema = z.string().min(1).max(80);
-
-async function customerMessageUrl(
-  booking: AdminBooking,
-  shop: { name: string; slug: string; address: string | null; timezone: string },
-  kind: "confirm" | "reject" | "cancel",
-): Promise<string> {
-  const local = utcToZoned(booking.startsAt, shop.timezone);
-  const origin = await getOrigin();
-  const input = {
-    shopName: shop.name,
-    serviceName: booking.serviceName,
-    dayLabel: dayLongLabel(local.date),
-    time: formatMinutes(local.minutes),
-    priceRsd: booking.priceRsd,
-    address: shop.address,
-    bookingUrl: `${origin}/${shop.slug}`,
-    cancelUrl: kind === "confirm" ? `${origin}/otkazi/${booking.id}` : undefined,
-  };
-  const text =
-    kind === "confirm" ? confirmationMessage(input) : kind === "reject" ? rejectionMessage(input) : cancellationMessage(input);
-  return whatsappLink(booking.customerPhone, text);
-}
 
 /* ------------------------------------------------------------------ status */
 
@@ -69,7 +53,7 @@ export async function changeStatusAction(raw: z.input<typeof statusInput>): Prom
 
   const action = input.data.action;
   const messageUrl = notifiesCustomer(action)
-    ? await customerMessageUrl(result.booking, shop, action as "confirm" | "reject" | "cancel")
+    ? customerMessageUrl(result.booking, shop, action as "confirm" | "reject" | "cancel", await getOrigin())
     : null;
   return {
     ok: true,
@@ -77,6 +61,13 @@ export async function changeStatusAction(raw: z.input<typeof statusInput>): Prom
     actions: allowedActions(result.booking.status, result.booking.startsAt, now),
     messageUrl,
   };
+}
+
+export async function markNotifiedAction(raw: { slug: string; bookingId: string }): Promise<{ ok: boolean }> {
+  const input = z.object({ slug: slugSchema, bookingId: z.uuid() }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireShopAccess(input.data.slug);
+  return { ok: await markNotified(getDb(), shop.id, input.data.bookingId) };
 }
 
 /* ------------------------------------------------------------------ manual booking */
@@ -124,7 +115,7 @@ export async function createManualBookingAction(raw: BookingRequestInput): Promi
   if (!booking) return { ok: false, reason: "slot_unavailable" };
   return {
     ok: true,
-    messageUrl: await customerMessageUrl(booking, shop, "confirm"),
+    messageUrl: customerMessageUrl(booking, shop, "confirm", await getOrigin()),
     summary: `${booking.customerName} · ${dayLongLabel(result.booking.date)} u ${result.booking.time}h`,
   };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openStatusText } from "../src/lib/availability/labels.ts";
-import { confirmationMessage, newBookingMessage } from "../src/lib/booking/messages.ts";
+import { confirmationMessage } from "../src/lib/booking/messages.ts";
 import { formatPhone, normalizePhone, whatsappLink } from "../src/lib/phone.ts";
 
 describe("normalizePhone", () => {
@@ -34,29 +34,9 @@ describe("formatPhone / whatsappLink", () => {
       "https://wa.me/381641234567?text=Zdravo%2C%20termin%208%3A30%3F",
     );
   });
-});
 
-describe("newBookingMessage", () => {
-  it("lists everything the shop needs, one line each", () => {
-    const text = newBookingMessage({
-      shopName: "Vulkanizer Brzi Točak",
-      serviceName: "Zamena guma",
-      vehicleTypeLabel: "Putničko",
-      vehicleLabel: "Golf 7",
-      dayLabel: "petak 23.10.",
-      time: "08:30",
-      priceRsd: 1500,
-      customerName: "Marko",
-      customerPhone: "+381641234567",
-    });
-    expect(text.split("\n")).toEqual([
-      "🛞 NOVI TERMIN – Vulkanizer Brzi Točak",
-      "🔄 Zamena guma",
-      "🚗 Putničko · Golf 7",
-      "📅 petak 23.10. u 08:30h",
-      "💰 1.500 din",
-      "👤 Marko · 📞 064 123 4567",
-    ]);
+  it("builds a plain wa.me link with no prefilled text when none is given", () => {
+    expect(whatsappLink("+381641234567")).toBe("https://wa.me/381641234567");
   });
 });
 

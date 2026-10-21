@@ -34,8 +34,6 @@ export type CreateBookingResult =
         vehicleId: string | null;
       };
       shop: ShopContext["shop"];
-      serviceName: string;
-      vehicleTypeLabel: string;
     }
   | { ok: false; reason: "shop_not_found" | "service_unavailable" | "slot_unavailable" };
 
@@ -86,7 +84,6 @@ export async function createBookingRequest(
   const found = findOffer(ctx, req.serviceId, req.vehicleTypeId);
   if (!found) return { ok: false, reason: "service_unavailable" };
   const { service, offer } = found;
-  const vehicleTypeLabel = ctx.vehicleTypes.find((vt) => vt.id === req.vehicleTypeId)?.label ?? "";
 
   const tz = ctx.settings.timezone;
   const startsAt = new Date(req.startsAt);
@@ -197,8 +194,6 @@ export async function createBookingRequest(
               vehicleId,
             },
             shop: ctx.shop,
-            serviceName: service.name,
-            vehicleTypeLabel,
           };
         } catch (err) {
           const code = pgErrorCode(err);

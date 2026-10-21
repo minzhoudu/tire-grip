@@ -23,7 +23,8 @@ export function formatPhone(e164: string): string {
   return `${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`;
 }
 
-/** Click-to-chat link with a prefilled message. */
-export function whatsappLink(e164: string, text: string): string {
-  return `https://wa.me/${e164.replace(/^\+/, "")}?text=${encodeURIComponent(text)}`;
+/** Click-to-chat link, with an optional prefilled message. */
+export function whatsappLink(e164: string, text?: string): string {
+  const base = `https://wa.me/${e164.replace(/^\+/, "")}`;
+  return text ? `${base}?text=${encodeURIComponent(text)}` : base;
 }

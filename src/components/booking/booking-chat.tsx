@@ -256,6 +256,7 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
             {flow.step === "done" && confirmation && (
               <Bot>
                 <Confirmation confirmation={confirmation} />
+                {confirmation.shopWhatsappUrl && <p className="mt-3 text-xs text-slate-500">Imate pitanja?</p>}
                 <Chips>
                   {confirmation.shopWhatsappUrl && (
                     <a
@@ -264,7 +265,7 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
                       rel="noopener noreferrer"
                       className="rounded-full border-2 border-navy-900 bg-[#25d366] px-4 py-2.5 font-mono text-[15px] font-semibold text-white active:scale-[0.98]"
                     >
-                      📲 JAVI RADNJI NA WHATSAPP
+                      📲 Javite se radnji na WhatsApp
                     </a>
                   )}
                   <Chip

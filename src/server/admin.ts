@@ -3,11 +3,14 @@
  * scopes every query by it — callers get it from requireShopAccess(), never
  * from user input.
  */
-import { and, asc, desc, eq, gte, gt, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } from "../db/schema.ts";
-import { addDays, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
-import { ACTIONS, FINAL_STATUSES, allowedActions, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
+import { addDays, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
+import { formatMinutes } from "../lib/availability/zoned.ts";
+import { cancellationMessage, confirmationMessage, rejectionMessage } from "../lib/booking/messages.ts";
+import { ACTIONS, FINAL_STATUSES, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
+import { whatsappLink } from "../lib/phone.ts";
 import { ADMIN_HORIZON_DAYS } from "./bookings.ts";
 import { ACTIVE_STATUSES, findOffer, loadBusy, type ShopContext } from "./shops.ts";
 
@@ -32,6 +35,7 @@ export interface AdminBooking {
   customerNote: string | null;
   createdAt: Date;
   cancelReason: string | null;
+  notifiedAt: Date | null;
 }
 
 const bookingColumns = {
@@ -53,6 +57,7 @@ const bookingColumns = {
   customerNote: bookings.customerNote,
   createdAt: bookings.createdAt,
   cancelReason: bookings.cancelReason,
+  notifiedAt: bookings.notifiedAt,
 };
 
 function bookingQuery(db: DB) {
@@ -142,16 +147,62 @@ export async function changeBookingStatus(
         : to === "cancelled" || to === "rejected"
           ? { cancelledAt: now }
           : {};
+  // A fresh confirm/reject/cancel means the customer hasn't been told about *this* status yet.
+  const notifyReset = notifiesCustomer(input.action) ? { notifiedAt: null } : {};
 
   const updated = await db
     .update(bookings)
-    .set({ status: to, updatedAt: now, ...stamp })
+    .set({ status: to, updatedAt: now, ...stamp, ...notifyReset })
     .where(and(eq(bookings.shopId, input.shopId), eq(bookings.id, input.bookingId), inArray(bookings.status, from)))
     .returning({ id: bookings.id });
   if (updated.length === 0) return { ok: false, reason: "not_allowed" };
 
   const booking = await getBooking(db, input.shopId, input.bookingId);
   return booking ? { ok: true, booking } : { ok: false, reason: "not_found" };
+}
+
+/** Conditional UPDATE (still unnotified) so a double tap or a stale screen can't double-count. */
+export async function markNotified(db: DB, shopId: string, bookingId: string): Promise<boolean> {
+  const updated = await db
+    .update(bookings)
+    .set({ notifiedAt: new Date() })
+    .where(and(eq(bookings.shopId, shopId), eq(bookings.id, bookingId), isNull(bookings.notifiedAt)))
+    .returning({ id: bookings.id });
+  return updated.length > 0;
+}
+
+/** Status → which customer-message kind applies, for whichever of confirm/reject/cancel is the booking's current status. */
+const NOTIFY_KIND: Partial<Record<BookingStatus, "confirm" | "reject" | "cancel">> = {
+  confirmed: "confirm",
+  rejected: "reject",
+  cancelled: "cancel",
+};
+
+export function notifyKindForStatus(status: BookingStatus): "confirm" | "reject" | "cancel" | null {
+  return NOTIFY_KIND[status] ?? null;
+}
+
+/** wa.me link with the right message for confirm/reject/cancel — built fresh each time, so it always reflects the booking's current details. */
+export function customerMessageUrl(
+  booking: AdminBooking,
+  shop: { name: string; slug: string; address: string | null; timezone: string },
+  kind: "confirm" | "reject" | "cancel",
+  origin: string,
+): string {
+  const local = utcToZoned(booking.startsAt, shop.timezone);
+  const input = {
+    shopName: shop.name,
+    serviceName: booking.serviceName,
+    dayLabel: dayLongLabel(local.date),
+    time: formatMinutes(local.minutes),
+    priceRsd: booking.priceRsd,
+    address: shop.address,
+    bookingUrl: `${origin}/${shop.slug}`,
+    cancelUrl: kind === "confirm" ? `${origin}/otkazi/${booking.id}` : undefined,
+  };
+  const text =
+    kind === "confirm" ? confirmationMessage(input) : kind === "reject" ? rejectionMessage(input) : cancellationMessage(input);
+  return whatsappLink(booking.customerPhone, text);
 }
 
 /* ------------------------------------------------------------ manual booking slots */

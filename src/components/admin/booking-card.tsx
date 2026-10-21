@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { changeStatusAction } from "@/app/admin/[slug]/actions";
+import { useState, useTransition } from "react";
+import { changeStatusAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { ACTIONS, CUSTOMER_CANCEL_REASON, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
@@ -25,6 +25,8 @@ export interface BookingCardData {
   bay: number | null;
   byPhone: boolean;
   cancelReason: string | null;
+  /** Set (and the "message not sent" banner shown) whenever the customer hasn't been told about the booking's current status yet — persists across visits, not just right after the action. */
+  notifyUrl: string | null;
 }
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -47,28 +49,22 @@ const ACTION_STYLES: Record<BookingAction, string> = {
   noShow: "bg-white text-slate-700 border border-slate-300",
 };
 
-const DONE_TEXT: Partial<Record<BookingAction, string>> = {
-  confirm: "✅ Potvrđeno. Pošaljite kupcu potvrdu:",
-  reject: "Zahtev je odbijen. Javite kupcu da izabere drugi termin:",
-  cancel: "Termin je otkazan. Javite kupcu:",
+/** Keyed by the booking's current status, since that's all we know when re-showing this banner on a later visit. */
+const NOTIFY_TEXT: Partial<Record<BookingStatus, string>> = {
+  confirmed: "Potvrđeno, ali kupac još nije obavešten.",
+  rejected: "Zahtev je odbijen, ali kupac još nije obavešten.",
+  cancelled: "Termin je otkazan, ali kupac još nije obavešten.",
 };
-
-/** While a card shows "send the message" the list must not refresh away from under it. */
-function holdRefresh(on: boolean) {
-  if (on) document.body.dataset.holdRefresh = "1";
-  else delete document.body.dataset.holdRefresh;
-}
 
 export function BookingCard({ slug, booking: b }: { slug: string; booking: BookingCardData }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
-  const [after, setAfter] = useState<{ action: BookingAction; status: BookingStatus; messageUrl: string } | null>(null);
   const [confirming, setConfirming] = useState<BookingAction | null>(null);
+  const [status, setStatus] = useState(b.status);
+  const [actions, setActions] = useState(b.actions);
+  const [notifyUrl, setNotifyUrl] = useState(b.notifyUrl);
 
-  useEffect(() => () => holdRefresh(false), []);
-
-  const status = after?.status ?? b.status;
   const isDestructive = (a: BookingAction) => a === "reject" || a === "cancel" || a === "noShow";
 
   function run(action: BookingAction) {
@@ -84,19 +80,15 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
         router.refresh();
         return;
       }
-      if (r.messageUrl) {
-        holdRefresh(true);
-        setAfter({ action, status: r.status, messageUrl: r.messageUrl });
-      } else {
-        router.refresh();
-      }
+      setStatus(r.status);
+      setActions(r.actions);
+      setNotifyUrl(r.messageUrl);
     });
   }
 
-  function closeAfter() {
-    holdRefresh(false);
-    setAfter(null);
-    router.refresh();
+  function sendNotify() {
+    setNotifyUrl(null);
+    void markNotifiedAction({ slug, bookingId: b.id });
   }
 
   const chatUrl = whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `);
@@ -142,40 +134,35 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
         {b.customerNote && <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">📝 {b.customerNote}</p>}
       </div>
 
-      {after ? (
-        <div className="mt-3 rounded-xl bg-emerald-50 p-3">
-          <p className="text-sm font-medium text-emerald-900">{DONE_TEXT[after.action]}</p>
-          <div className="mt-2 flex gap-2">
-            <a
-              href={after.messageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setTimeout(closeAfter, 500)}
-              className="flex-1 rounded-xl bg-[#25d366] px-4 py-3 text-center font-bold text-white active:scale-[0.98]"
-            >
-              📲 Pošalji na WhatsApp
-            </a>
-            <button type="button" onClick={closeAfter} className="rounded-xl px-3 py-3 text-sm font-medium text-slate-600">
-              Preskoči
-            </button>
-          </div>
+      {notifyUrl && (
+        <div className="mt-3 rounded-xl bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-900">⚠️ {NOTIFY_TEXT[status] ?? "Poruka kupcu nije poslata."}</p>
+          <a
+            href={notifyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={sendNotify}
+            className="mt-2 block rounded-xl bg-[#25d366] px-4 py-3 text-center font-bold text-white active:scale-[0.98]"
+          >
+            📲 Pošalji na WhatsApp
+          </a>
         </div>
-      ) : (
-        b.actions.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {b.actions.map((a) => (
-              <button
-                key={a}
-                type="button"
-                disabled={pending}
-                onClick={() => run(a)}
-                className={`min-w-[7rem] flex-1 rounded-xl px-4 py-3 text-[15px] font-bold active:scale-[0.98] disabled:opacity-50 ${ACTION_STYLES[a]}`}
-              >
-                {confirming === a ? `Sigurno? ${ACTIONS[a].label}` : ACTIONS[a].label}
-              </button>
-            ))}
-          </div>
-        )
+      )}
+
+      {actions.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {actions.map((a) => (
+            <button
+              key={a}
+              type="button"
+              disabled={pending}
+              onClick={() => run(a)}
+              className={`min-w-[7rem] flex-1 rounded-xl px-4 py-3 text-[15px] font-bold active:scale-[0.98] disabled:opacity-50 ${ACTION_STYLES[a]}`}
+            >
+              {confirming === a ? `Sigurno? ${ACTIONS[a].label}` : ACTIONS[a].label}
+            </button>
+          ))}
+        </div>
       )}
     </article>
   );

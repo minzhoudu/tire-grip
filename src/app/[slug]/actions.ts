@@ -16,7 +16,6 @@ import {
   zonedToUtc,
 } from "@/lib/availability";
 import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/lib/booking/request";
-import { newBookingMessage } from "@/lib/booking/messages";
 import { formatPhone, whatsappLink } from "@/lib/phone";
 import { createBookingRequest } from "@/server/bookings";
 import { getOrigin } from "@/server/origin";
@@ -145,20 +144,8 @@ export async function submitBookingAction(raw: BookingRequestInput & { reminderT
     if (!result.ok) return { ok: false, reason: result.reason };
     if (reminderToken) await linkBookingToReminder(getDb(), { shopId: result.shop.id, token: reminderToken, bookingId: result.booking.id });
 
-    const { booking, shop, serviceName, vehicleTypeLabel } = result;
+    const { booking, shop } = result;
     const dayLabel = dayLongLabel(booking.date);
-    const message = newBookingMessage({
-      shopName: shop.name,
-      serviceName,
-      vehicleTypeLabel,
-      vehicleLabel: req.vehicleLabel || undefined,
-      dayLabel,
-      time: booking.time,
-      priceRsd: booking.priceRsd,
-      customerName: req.name,
-      customerPhone: req.phone,
-      note: req.note || undefined,
-    });
 
     return {
       ok: true,
@@ -169,7 +156,7 @@ export async function submitBookingAction(raw: BookingRequestInput & { reminderT
         priceRsd: booking.priceRsd,
         customerName: req.name,
         phoneDisplay: formatPhone(req.phone),
-        shopWhatsappUrl: shop.phone ? whatsappLink(shop.phone, message) : null,
+        shopWhatsappUrl: shop.phone ? whatsappLink(shop.phone) : null,
         cancelUrl: `${await getOrigin()}/otkazi/${booking.id}`,
       },
     };
