@@ -103,3 +103,33 @@ Testovi: `tests/booking-status.test.ts`, `tests/admin.int.test.ts` (prijava, sta
 **`/platforma`** — dashboard vlasnika platforme (ne vlasnika radnje): pregled svih radnji, odobravanje/odbijanje novih registracija, suspenzija, ručna promena plana i „Uđi kao" (impersonacija) za podršku — vremenski ograničena (1h) sesija bez diranja `shop_members`, vidljiva vlasniku radnje kao baner sa dugmetom za prekid. Pristup preko `PLATFORM_ADMIN_EMAILS` u `.env` (lista email adresa odvojenih zarezom — nema posebne kolone u bazi, namerno, da se ne može eskalirati kroz app bug). Svaka akcija (odobrenje, suspenzija, promena plana, ulazak/izlazak iz impersonacije) se beleži u `platform_audit_log`.
 
 Testovi: `tests/platform.int.test.ts` (dashboard, suspenzija, plan, impersonacija) i `tests/signup.int.test.ts` (registracija, duple adrese/emailovi, slaba lozinka).
+
+## Deploy
+
+### Za početak, besplatno: Vercel + Neon
+
+`vercel.json` postavlja build komandu na `pnpm db:setup && pnpm build`, pa se migracije primenjuju pri svakom deploy-u automatski — nema potrebe za serverom, terminalom ni Docker-om.
+
+1. [neon.tech](https://neon.tech) → novi projekat → kopiraj **pooled** connection string (sa `-pooler` u hostname-u — serverless funkcije otvaraju mnogo kratkih konekcija, samo pooler to podnosi).
+2. [vercel.com](https://vercel.com) → Add New Project → uvezi `tire-grip` GitHub repo.
+3. Project Settings → Environment Variables, isto kao `.env.example`:
+   - `DATABASE_URL` — pooled niska iz koraka 1
+   - `BETTER_AUTH_SECRET` — `openssl rand -base64 32`
+   - `BETTER_AUTH_URL` — Vercel-ov URL aplikacije (npr. `https://tire-grip.vercel.app`, ili sopstveni domen)
+   - `PLATFORM_ADMIN_EMAILS` — email vlasnika platforme
+4. Project Settings → General → Node.js Version: **22.x**.
+5. Deploy. Prvi nalog preko `/registracija` (javna, pravi i radnju i vlasnika).
+
+### Kasnije, sopstveni server: Hetzner + Coolify
+
+`Dockerfile` pravi jednu runtime sliku (ne samo `.next/standalone`) — zadržava ceo `node_modules` da bi Coolify-jeva komanda posle deploy-a mogla da pokrene `pnpm db:setup` (i `pnpm admin:create`/`pnpm db:seed` po potrebi) u istom kontejneru. Ima smisla kad se pređe na naplatu i poželi se kontrola nad infrastrukturom — do tad Vercel+Neon ne traže ni karticu.
+
+Promenljive okruženja na aplikaciji u Coolify-ju (isto kao u `.env.example`, samo bez fajla):
+- `DATABASE_URL` — interna konekcija ka Postgres servisu u Coolify-ju (ne izlaže se javno)
+- `BETTER_AUTH_SECRET` — `openssl rand -base64 32`, čuva se stabilno (ne menja se posle prvog deploy-a)
+- `BETTER_AUTH_URL` — javni URL aplikacije, npr. `https://app.example.rs`
+- `PLATFORM_ADMIN_EMAILS` — email vlasnika platforme
+
+Post-deployment Command u podešavanjima aplikacije: `pnpm db:setup` (primeni migracije pri svakom deploy-u).
+
+Prvi nalog: ili `/registracija` (javna, pravi i radnju i vlasnika), ili `pnpm admin:create` kroz Coolify-jev terminal za konkretnu radnju (npr. posle `pnpm db:seed` za demo radnju).

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { ShopList } from "@/components/platform/shop-list";
 import { getDb } from "@/db";
 import { listAllShops } from "@/server/platform";
@@ -7,6 +8,7 @@ import { requirePlatformAdmin } from "@/server/session";
 export const metadata: Metadata = { title: "Platforma · Tire Grip", robots: { index: false } };
 
 export default async function PlatformDashboardPage() {
+  await connection();
   await requirePlatformAdmin();
   const shops = await listAllShops(getDb());
 

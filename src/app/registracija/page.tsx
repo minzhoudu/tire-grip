@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { getSessionUser } from "@/server/session";
 import { SignupForm } from "./signup-form";
 
 export const metadata: Metadata = { title: "Registracija · Tire Grip" };
 
 export default async function SignupPage() {
+  await connection();
   if (await getSessionUser()) redirect("/admin");
 
   return (

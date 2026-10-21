@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { getDb } from "@/db";
 import { listUserShops } from "@/server/accounts";
 import { requireUser } from "@/server/session";
@@ -9,6 +10,7 @@ import { signOutAction } from "./[slug]/actions";
 export const metadata: Metadata = { title: "Panel · Tire Grip", robots: { index: false } };
 
 export default async function AdminHome() {
+  await connection();
   const user = await requireUser("/admin");
   const shops = await listUserShops(getDb(), user.id);
 

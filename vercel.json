@@ -1,0 +1,3 @@
+{
+  "buildCommand": "pnpm db:setup && pnpm build"
+}

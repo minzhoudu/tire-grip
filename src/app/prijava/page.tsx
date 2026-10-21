@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { safeNextPath } from "@/lib/safe-next";
 import { getSessionUser } from "@/server/session";
 import { LoginForm } from "./login-form";
@@ -9,6 +10,7 @@ export const metadata: Metadata = { title: "Prijava · Tire Grip", robots: { ind
 type Props = { searchParams: Promise<{ next?: string }> };
 
 export default async function LoginPage({ searchParams }: Props) {
+  await connection();
   const { next } = await searchParams;
   const target = safeNextPath(next);
   if (await getSessionUser()) redirect(target);

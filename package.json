@@ -24,6 +24,8 @@
     "admin:create": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
+    "@neon/config": "^1.9.3",
+    "@neon/env": "^1.6.4",
     "better-auth": "^1.7.12",
     "drizzle-orm": "^0.45.2",
     "next": "^16.0.0",
