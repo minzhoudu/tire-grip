@@ -1,5 +1,5 @@
 /**
- * Tire Grip — database schema (Drizzle ORM, PostgreSQL 16)
+ * Moj Vulkanizer — database schema (Drizzle ORM, PostgreSQL 16)
  *
  * Multi-tenant: every business table carries `shop_id`. Child rows reference
  * their parents with COMPOSITE foreign keys (shop_id, id), so the database

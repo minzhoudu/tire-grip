@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { getSessionUser } from "@/server/session";
 import { SignupForm } from "./signup-form";
 
-export const metadata: Metadata = { title: "Registracija · Tire Grip" };
+export const metadata: Metadata = { title: "Registracija · Moj Vulkanizer" };
 
 export default async function SignupPage() {
   await connection();
@@ -18,7 +18,7 @@ export default async function SignupPage() {
         </div>
         <div>
           <h1 className="font-mono text-2xl font-bold">Registracija</h1>
-          <p className="text-sm text-slate-600">Dovedite svoju radnju na Tire Grip</p>
+          <p className="text-sm text-slate-600">Dovedite svoju radnju na Moj Vulkanizer</p>
         </div>
       </div>
       <SignupForm />

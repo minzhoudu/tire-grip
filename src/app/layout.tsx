@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-inter" 
 const courierPrime = Courier_Prime({ subsets: ["latin", "latin-ext"], weight: ["400", "700"], variable: "--font-courier-prime" });
 
 export const metadata: Metadata = {
-  title: "Tire Grip",
+  title: "Moj Vulkanizer",
   description: "Zakažite zamenu guma bez zvanja i bez čekanja u redu.",
 };
 

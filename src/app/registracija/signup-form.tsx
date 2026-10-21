@@ -80,7 +80,6 @@ export function SignupForm() {
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Internet adresa</span>
         <div className="mt-1.5 flex items-center gap-1.5">
-          <span className="font-mono text-sm text-slate-400">tiregrip.rs/</span>
           <input
             className={`${input} font-mono ${errors.slug ? "border-red-400" : ""}`}
             value={fields.slug}
@@ -89,6 +88,7 @@ export function SignupForm() {
               set("slug", slugify(e.target.value));
             }}
           />
+          <span className="font-mono text-sm text-slate-400">.mojvulkanizer.com</span>
         </div>
         {errors.slug ? (
           <span className="mt-1 block text-sm text-red-700">{errors.slug}</span>

@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Tire Grip — zakazivanje za vulkanizere",
+  title: "Moj Vulkanizer — zakazivanje za vulkanizere",
   description: "Kupci zakazuju zamenu guma sami, bez zvanja. Vi samo potvrdite termin.",
 };
 
 const STEPS = [
-  { icon: "🔗", title: "Dobijete svoj link", text: "tiregrip.rs/vasa-radnja — podelite ga na WhatsApp, Instagram, Google profil radnje." },
+  { icon: "🔗", title: "Dobijete svoj link", text: "vasa-radnja.mojvulkanizer.com — podelite ga na WhatsApp, Instagram, Google profil radnje." },
   { icon: "💬", title: "Kupac zakazuje sam", text: "Bira uslugu, vozilo i slobodan termin kroz kratak chat na telefonu. Bez zvanja, bez čekanja u redu." },
   { icon: "✅", title: "Vi samo potvrdite", text: "Zahtev stiže u panel, potvrdite ga jednim dodirom. Kupac dobija potvrdu na WhatsApp." },
 ];
@@ -21,7 +21,7 @@ export default function LandingPage() {
             <div className="grid size-10 place-items-center rounded-xl bg-accent-500 text-xl" aria-hidden>
               🛞
             </div>
-            <p className="font-mono text-lg font-bold">Tire Grip</p>
+            <p className="font-mono text-lg font-bold">Moj Vulkanizer</p>
           </div>
           <div className="mt-8 md:flex md:items-end md:justify-between md:gap-10">
             <div className="md:max-w-xl">

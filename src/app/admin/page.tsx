@@ -8,7 +8,7 @@ import { shopAdminUrl } from "@/server/origin";
 import { requireUser } from "@/server/session";
 import { signOutAction } from "./[slug]/actions";
 
-export const metadata: Metadata = { title: "Panel · Tire Grip", robots: { index: false } };
+export const metadata: Metadata = { title: "Panel · Moj Vulkanizer", robots: { index: false } };
 
 export default async function AdminHome() {
   await connection();

@@ -1,4 +1,4 @@
-# Tire Grip
+# Moj Vulkanizer
 
 Mobile-first SaaS za zakazivanje zamene guma kod vulkanizera: kupac kroz chat sa dugmićima izabere uslugu, vidi cenu i slobodan termin, a vulkanizer potvrdi zahtev iz admin panela (wa.me / Viber link).
 

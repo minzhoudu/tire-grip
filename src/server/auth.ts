@@ -16,7 +16,7 @@ export const MIN_PASSWORD_LENGTH = 10;
 
 function createAuth() {
   return betterAuth({
-    appName: "Tire Grip",
+    appName: "Moj Vulkanizer",
     secret: process.env.BETTER_AUTH_SECRET,
     // Object form (not a single string) so the same deployment answers correctly on the
     // bare domain, platform.<domain>, and every {slug}.<domain> admin subdomain.

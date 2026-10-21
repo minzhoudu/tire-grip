@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { requirePlatformAdmin } from "@/server/session";
 import { signOutAction } from "../admin/[slug]/actions";
 
-export const metadata: Metadata = { title: "Platforma · Tire Grip", robots: { index: false } };
+export const metadata: Metadata = { title: "Platforma · Moj Vulkanizer", robots: { index: false } };
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
   await connection();
@@ -16,7 +16,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
         <div className="mx-auto flex max-w-5xl items-start justify-between gap-3">
           <div>
             <p className="font-mono text-lg font-bold">Platforma</p>
-            <p className="text-sm text-slate-300">Tire Grip</p>
+            <p className="text-sm text-slate-300">Moj Vulkanizer</p>
           </div>
           <form action={signOutAction}>
             <button className="rounded-full px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white">Odjava</button>
