@@ -2,11 +2,13 @@ import Link from "next/link";
 import { getDb } from "@/db";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { BookingCard, type BookingCardData } from "@/components/admin/booking-card";
+import { SetupChecklistCard } from "@/components/admin/setup-checklist";
 import { dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
 import { allowedActions } from "@/lib/booking/status";
 import { customerMessageUrl, listBookings, notifyKindForStatus, type AdminView } from "@/server/admin";
 import { getOrigin } from "@/server/origin";
+import { getSetupChecklist } from "@/server/settings";
 import { getAdminBase, requireShopAccess } from "@/server/session";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ view?: string }> };
@@ -15,12 +17,16 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const { view: rawView } = await searchParams;
   const view: AdminView = rawView === "history" ? "history" : "upcoming";
-  const { shop } = await requireShopAccess(slug);
+  const { shop, role } = await requireShopAccess(slug);
 
   const now = new Date();
   const today = shopToday(shop, now);
   const rows = await listBookings(getDb(), shop, view, now);
-  const [origin, base] = await Promise.all([getOrigin(), getAdminBase(slug)]);
+  const [origin, base, checklist] = await Promise.all([
+    getOrigin(),
+    getAdminBase(slug),
+    role === "owner" ? getSetupChecklist(getDb(), shop.id) : Promise.resolve(null),
+  ]);
 
   // Group by local day, keeping the query's order.
   const groups = new Map<string, BookingCardData[]>();
@@ -59,6 +65,8 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   return (
     <div className="flex flex-col gap-4">
       {view === "upcoming" && <AutoRefresh seconds={30} />}
+
+      {view === "upcoming" && checklist && <SetupChecklistCard checklist={checklist} base={base} />}
 
       <div className="flex rounded-xl border-2 border-navy-900 bg-white p-1 text-sm font-semibold">
         {(

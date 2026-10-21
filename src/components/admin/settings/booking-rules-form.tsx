@@ -15,11 +15,51 @@ export interface BookingRules {
   autoConfirm: boolean;
 }
 
-const FIELDS: { key: keyof Omit<BookingRules, "autoConfirm">; label: string; min: number; max: number; step: number; suffix: string }[] = [
-  { key: "bays", label: "Broj boksova", min: 1, max: 20, step: 1, suffix: "" },
-  { key: "slotStepMin", label: "Korak termina", min: 5, max: 240, step: 5, suffix: "min" },
-  { key: "bookingHorizonDays", label: "Horizont zakazivanja", min: 1, max: 120, step: 1, suffix: "dana" },
-  { key: "minNoticeMin", label: "Minimalna najava", min: 0, max: 2880, step: 5, suffix: "min" },
+const FIELDS: {
+  key: keyof Omit<BookingRules, "autoConfirm">;
+  label: string;
+  note: string;
+  min: number;
+  max: number;
+  step: number;
+  suffix: string;
+}[] = [
+  {
+    key: "bays",
+    label: "Broj boksova",
+    note: "Koliko vozila možete da primite istovremeno — svaki termin zauzima jedan boks.",
+    min: 1,
+    max: 20,
+    step: 1,
+    suffix: "",
+  },
+  {
+    key: "slotStepMin",
+    label: "Korak termina",
+    note: "Razmak između ponuđenih termina tokom dana (npr. 30 min → termini na pola sata).",
+    min: 5,
+    max: 240,
+    step: 5,
+    suffix: "min",
+  },
+  {
+    key: "bookingHorizonDays",
+    label: "Horizont zakazivanja",
+    note: "Koliko dana unapred kupci mogu da vide i zakažu termin.",
+    min: 1,
+    max: 120,
+    step: 1,
+    suffix: "dana",
+  },
+  {
+    key: "minNoticeMin",
+    label: "Minimalna najava",
+    note: "Najkraće vreme pre termina da bi kupac mogao da ga zakaže — sprečava zakazivanje u poslednji čas.",
+    min: 0,
+    max: 2880,
+    step: 5,
+    suffix: "min",
+  },
 ];
 
 export function BookingRulesForm({ slug, rules }: { slug: string; rules: BookingRules }) {
@@ -38,17 +78,20 @@ export function BookingRulesForm({ slug, rules }: { slug: string; rules: Booking
   return (
     <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
       {FIELDS.map((f) => (
-        <div key={f.key} className="flex items-center justify-between gap-3">
-          <span className="text-sm font-semibold text-slate-700">{f.label}</span>
-          <Stepper
-            label={f.label}
-            value={fields[f.key]}
-            min={f.min}
-            max={f.max}
-            step={f.step}
-            suffix={f.suffix}
-            onChange={(v) => setFields((cur) => ({ ...cur, [f.key]: v }))}
-          />
+        <div key={f.key} className="flex flex-col gap-1 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-slate-700">{f.label}</span>
+            <Stepper
+              label={f.label}
+              value={fields[f.key]}
+              min={f.min}
+              max={f.max}
+              step={f.step}
+              suffix={f.suffix}
+              onChange={(v) => setFields((cur) => ({ ...cur, [f.key]: v }))}
+            />
+          </div>
+          <p className="text-xs text-slate-500">{f.note}</p>
         </div>
       ))}
       <ToggleRow

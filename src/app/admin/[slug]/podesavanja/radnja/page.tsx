@@ -8,7 +8,11 @@ export default async function ShopInfoPage({ params }: { params: Promise<{ slug:
 
   return (
     <div className="flex flex-col gap-4">
-      <SubpageHeader base={await getAdminBase(slug)} title="Podaci radnje" />
+      <SubpageHeader
+        base={await getAdminBase(slug)}
+        title="Podaci radnje"
+        description="Naziv, grad, adresa i telefon koje kupci vide na stranici za zakazivanje."
+      />
       <ShopInfoForm slug={slug} shop={{ name: shop.name, city: shop.city, address: shop.address, phone: shop.phone }} />
     </div>
   );

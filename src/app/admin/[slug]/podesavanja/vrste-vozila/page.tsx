@@ -11,7 +11,11 @@ export default async function VehicleTypesPage({ params }: { params: Promise<{ s
 
   return (
     <div className="flex flex-col gap-4">
-      <SubpageHeader base={await getAdminBase(slug)} title="Vrste vozila" />
+      <SubpageHeader
+        base={await getAdminBase(slug)}
+        title="Vrste vozila"
+        description="Tipovi vozila koje servisirate — svaka usluga ima svoju cenu po vrsti vozila, pa ovo podesite pre Usluga i cena."
+      />
       <VehicleTypesEditor slug={slug} vehicleTypes={vehicleTypes} />
     </div>
   );

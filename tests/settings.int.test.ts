@@ -18,8 +18,10 @@ import {
   deleteException,
   deleteService,
   deleteVehicleType,
+  getSetupChecklist,
   listExceptions,
   listServicesForSettings,
+  listSettingsSections,
   listVehicleTypesForSettings,
   listWorkingHours,
   moveService,
@@ -95,6 +97,33 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
     await updateShopInfo(db, shopId, { name: "Novo ime", city: "Novi Sad", address: "Bulevar 1", phone: "+381641112222" });
     const [row] = await db.select().from(shops).where(eq(shops.id, shopId));
     expect(row).toMatchObject({ name: "Novo ime", city: "Novi Sad", address: "Bulevar 1", phone: "+381641112222" });
+  });
+
+  describe("setup checklist", () => {
+    it("is all done for a shop with hours, vehicle types and services already set up", async () => {
+      const db = getDb();
+      expect(await getSetupChecklist(db, shopId)).toEqual({ radnoVreme: true, vrsteVozila: true, uslugeICene: true });
+
+      const [shop] = await db.select().from(shops).where(eq(shops.id, shopId));
+      const sections = await listSettingsSections(db, shop!, "/admin/x");
+      expect(sections.find((s) => s.title === "Radno vreme")?.incomplete).toBeFalsy();
+      expect(sections.find((s) => s.title === "Usluge i cene")?.incomplete).toBeFalsy();
+      expect(sections.find((s) => s.title === "Vrste vozila")?.incomplete).toBeFalsy();
+    });
+
+    it("flags all three as incomplete for a freshly created shop", async () => {
+      const db = getDb();
+      const [freshShop] = await db.insert(shops).values({ slug: `${slug}-fresh`, name: "Prazna radnja" }).returning();
+
+      expect(await getSetupChecklist(db, freshShop!.id)).toEqual({ radnoVreme: false, vrsteVozila: false, uslugeICene: false });
+
+      const sections = await listSettingsSections(db, freshShop!, "/admin/x");
+      expect(sections.find((s) => s.title === "Radno vreme")?.incomplete).toBe(true);
+      expect(sections.find((s) => s.title === "Usluge i cene")?.incomplete).toBe(true);
+      expect(sections.find((s) => s.title === "Vrste vozila")?.incomplete).toBe(true);
+
+      await db.delete(shops).where(eq(shops.id, freshShop!.id));
+    });
   });
 
   describe("booking rules: reducing bays", () => {

@@ -4,6 +4,7 @@
  * Every function takes the shopId explicitly and scopes every query by it.
  */
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { cache } from "react";
 import type { DB } from "../db/index.ts";
 import {
   bookings,
@@ -100,14 +101,15 @@ export interface AffectedBooking {
   customerName: string;
 }
 
-export async function listWorkingHours(db: DB, shopId: string): Promise<WeeklyHours[]> {
+/** cache()-wrapped: the settings layout (sidebar summary) and a section's own page both call this per request — one query, not two. */
+export const listWorkingHours = cache(async (db: DB, shopId: string): Promise<WeeklyHours[]> => {
   const rows = await db
     .select()
     .from(workingHours)
     .where(eq(workingHours.shopId, shopId))
     .orderBy(asc(workingHours.weekday), asc(workingHours.opensAt));
   return rows.map((r) => ({ weekday: r.weekday, opensAt: r.opensAt, closesAt: r.closesAt }));
-}
+});
 
 /** Future open bookings that no longer fit the (prospective) weekly hours; exceptions override the week, so those dates are skipped. */
 async function findBookingsOutsideHours(
@@ -168,13 +170,14 @@ export interface ExceptionInput {
   note: string | null;
 }
 
-export async function listExceptions(db: DB, shopId: string): Promise<ScheduleException[]> {
+/** cache()-wrapped: see listWorkingHours. */
+export const listExceptions = cache(async (db: DB, shopId: string): Promise<ScheduleException[]> => {
   return db
     .select()
     .from(scheduleExceptions)
     .where(and(eq(scheduleExceptions.shopId, shopId), sql`${scheduleExceptions.date} >= current_date - 1`))
     .orderBy(asc(scheduleExceptions.date));
-}
+});
 
 /** At most one exception per date: a new one for an existing date replaces it. */
 export async function upsertException(db: DB, shopId: string, input: ExceptionInput): Promise<void> {
@@ -221,7 +224,8 @@ export interface ServiceWithPrices {
   prices: ServicePriceRow[];
 }
 
-export async function listServicesForSettings(db: DB, shopId: string): Promise<ServiceWithPrices[]> {
+/** cache()-wrapped: see listWorkingHours. */
+export const listServicesForSettings = cache(async (db: DB, shopId: string): Promise<ServiceWithPrices[]> => {
   const [serviceRows, priceRows, bookingCounts] = await Promise.all([
     db.select().from(services).where(eq(services.shopId, shopId)).orderBy(asc(services.sortOrder), asc(services.name)),
     db.select().from(servicePrices).where(eq(servicePrices.shopId, shopId)),
@@ -248,7 +252,7 @@ export async function listServicesForSettings(db: DB, shopId: string): Promise<S
       .filter((p) => p.serviceId === s.id)
       .map((p) => ({ vehicleTypeId: p.vehicleTypeId, priceRsd: p.priceRsd, durationMin: p.durationMin })),
   }));
-}
+});
 
 export interface ServiceInput {
   kind: ServiceKind;
@@ -359,7 +363,8 @@ export interface VehicleTypeWithUsage {
   hasBookings: boolean;
 }
 
-export async function listVehicleTypesForSettings(db: DB, shopId: string): Promise<VehicleTypeWithUsage[]> {
+/** cache()-wrapped: see listWorkingHours. */
+export const listVehicleTypesForSettings = cache(async (db: DB, shopId: string): Promise<VehicleTypeWithUsage[]> => {
   const [rows, bookingCounts] = await Promise.all([
     db.select().from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId)).orderBy(asc(vehicleTypes.sortOrder)),
     db
@@ -378,7 +383,7 @@ export async function listVehicleTypesForSettings(db: DB, shopId: string): Promi
     sortOrder: vt.sortOrder,
     hasBookings: (bookingCountByType.get(vt.id) ?? 0) > 0,
   }));
-}
+});
 
 export interface VehicleTypeInput {
   label: string;
@@ -449,6 +454,8 @@ export interface SettingsSection {
   icon: string;
   title: string;
   subtitle: string;
+  /** No working hours / vehicle types / services yet — customers can't book until this is set up. */
+  incomplete?: boolean;
 }
 
 /** The 5 settings categories with their live one-line summaries — shared by the mobile hub list and the desktop sidebar. `adminBase` comes from getAdminBase(shop.slug). */
@@ -481,7 +488,8 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
       href: `${base}/radno-vreme`,
       icon: "🕒",
       title: "Radno vreme",
-      subtitle: openDays === 0 ? "Radnja je zatvorena svih dana" : `Otvoreno ${openDays}/7 dana u nedelji`,
+      subtitle: openDays === 0 ? "Nije podešeno — kupci ne mogu da zakažu" : `Otvoreno ${openDays}/7 dana u nedelji`,
+      incomplete: openDays === 0,
     },
     {
       href: `${base}/praznici`,
@@ -493,13 +501,35 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
       href: `${base}/usluge`,
       icon: "🛞",
       title: "Usluge i cene",
-      subtitle: `${activeServices}/${services.length} aktivno`,
+      subtitle: activeServices === 0 ? "Nije podešeno — kupci nemaju šta da zakažu" : `${activeServices}/${services.length} aktivno`,
+      incomplete: activeServices === 0,
     },
     {
       href: `${base}/vrste-vozila`,
       icon: "🚗",
       title: "Vrste vozila",
-      subtitle: `${activeVehicleTypes}/${vehicleTypesList.length} aktivno`,
+      subtitle: activeVehicleTypes === 0 ? "Nije podešeno — podesite pre Usluga i cena" : `${activeVehicleTypes}/${vehicleTypesList.length} aktivno`,
+      incomplete: activeVehicleTypes === 0,
     },
   ];
+}
+
+export interface SetupChecklist {
+  radnoVreme: boolean;
+  vrsteVozila: boolean;
+  uslugeICene: boolean;
+}
+
+/** Whether the 3 things a shop needs before customers can actually book anything are in place. Same source data as listSettingsSections (cache()-deduped). */
+export async function getSetupChecklist(db: DB, shopId: string): Promise<SetupChecklist> {
+  const [weeklyHours, vehicleTypesList, services] = await Promise.all([
+    listWorkingHours(db, shopId),
+    listVehicleTypesForSettings(db, shopId),
+    listServicesForSettings(db, shopId),
+  ]);
+  return {
+    radnoVreme: new Set(weeklyHours.map((h) => h.weekday)).size > 0,
+    vrsteVozila: vehicleTypesList.some((vt) => vt.isActive),
+    uslugeICene: services.some((s) => s.isActive),
+  };
 }

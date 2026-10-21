@@ -8,7 +8,11 @@ export default async function BookingRulesPage({ params }: { params: Promise<{ s
 
   return (
     <div className="flex flex-col gap-4">
-      <SubpageHeader base={await getAdminBase(slug)} title="Pravila zakazivanja" />
+      <SubpageHeader
+        base={await getAdminBase(slug)}
+        title="Pravila zakazivanja"
+        description="Koliko vozila možete da primite istovremeno i kako se grade termini koje kupci vide."
+      />
       <BookingRulesForm
         slug={slug}
         rules={{
