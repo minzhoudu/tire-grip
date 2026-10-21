@@ -33,6 +33,7 @@ export default async function ShopBookingPage({ params, searchParams }: Props) {
   const shop: ChatShop = {
     slug: ctx.shop.slug,
     name: ctx.shop.name,
+    businessLabel: ctx.shop.businessLabel,
     city: ctx.shop.city,
     address: ctx.shop.address,
     phone: ctx.shop.phone,

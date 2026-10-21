@@ -39,6 +39,7 @@ const timeSchema = z.string().regex(/^\d{2}:\d{2}$/);
 const shopInfoInput = z.object({
   slug: slugSchema,
   name: z.string().trim().min(1, "Unesite naziv radnje").max(120),
+  businessLabel: z.string().trim().max(40).optional().default(""),
   city: z.string().trim().max(80).optional().default(""),
   address: z.string().trim().max(200).optional().default(""),
   phone: z.string().trim().max(30).optional().default(""),
@@ -59,6 +60,7 @@ export async function updateShopInfoAction(raw: z.input<typeof shopInfoInput>): 
 
   await updateShopInfo(getDb(), shop.id, {
     name: input.data.name,
+    businessLabel: input.data.businessLabel || null,
     city: input.data.city || null,
     address: input.data.address || null,
     phone,

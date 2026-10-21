@@ -20,6 +20,7 @@ import type { PublicService, PublicVehicleType } from "@/server/shops";
 export interface ChatShop {
   slug: string;
   name: string;
+  businessLabel: string | null;
   city: string | null;
   address: string | null;
   phone: string | null;
@@ -139,7 +140,10 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
     <div className="min-h-dvh bg-slate-100 md:flex md:items-start md:justify-center md:gap-10 md:bg-navy-900 md:px-10 md:py-12">
       <aside className="hidden shrink-0 md:block md:w-72 md:pt-6 md:text-white">
         <p className="font-mono text-3xl font-bold">{shop.name}</p>
-        <p className="mt-1 text-slate-300">Vulkanizer{shop.city ? ` · ${shop.city}` : ""}</p>
+        <p className="mt-1 text-slate-300">
+          {shop.businessLabel || "Vulkanizer"}
+          {shop.city ? ` · ${shop.city}` : ""}
+        </p>
         <p className="mt-5 flex items-center gap-1.5 text-sm font-medium">
           <span className={`size-2.5 rounded-full ${shop.open ? "bg-emerald-500" : "bg-slate-400"}`} aria-hidden />
           {shop.statusText}
@@ -434,7 +438,10 @@ function Header({ shop }: { shop: ChatShop }) {
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</h1>
-          <p className="truncate text-sm text-slate-300">Vulkanizer{shop.city ? ` · ${shop.city}` : ""}</p>
+          <p className="truncate text-sm text-slate-300">
+            {shop.businessLabel || "Vulkanizer"}
+            {shop.city ? ` · ${shop.city}` : ""}
+          </p>
         </div>
         {shop.phone && (
           <a

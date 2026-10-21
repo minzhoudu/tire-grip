@@ -28,6 +28,7 @@ export type ServiceKind = (typeof services.$inferInsert)["kind"];
 
 export interface ShopInfoInput {
   name: string;
+  businessLabel: string | null;
   city: string | null;
   address: string | null;
   phone: string | null;
@@ -36,7 +37,7 @@ export interface ShopInfoInput {
 export async function updateShopInfo(db: DB, shopId: string, input: ShopInfoInput): Promise<void> {
   await db
     .update(shops)
-    .set({ name: input.name, city: input.city, address: input.address, phone: input.phone })
+    .set({ name: input.name, businessLabel: input.businessLabel, city: input.city, address: input.address, phone: input.phone })
     .where(eq(shops.id, shopId));
 }
 

@@ -99,6 +99,8 @@ export const shops = pgTable(
     /** Public URL part: app.example.rs/{slug} */
     slug: text("slug").notNull(),
     name: text("name").notNull(),
+    /** Shown under the shop name on the customer booking page, e.g. "Vulkanizer", "Perionica". Falls back to "Vulkanizer" when unset. */
+    businessLabel: text("business_label"),
     city: text("city"),
     address: text("address"),
     /** E.164, e.g. +381641234567 — used for wa.me / viber links */

@@ -94,9 +94,21 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
 
   it("updates shop info", async () => {
     const db = getDb();
-    await updateShopInfo(db, shopId, { name: "Novo ime", city: "Novi Sad", address: "Bulevar 1", phone: "+381641112222" });
+    await updateShopInfo(db, shopId, {
+      name: "Novo ime",
+      businessLabel: "Perionica",
+      city: "Novi Sad",
+      address: "Bulevar 1",
+      phone: "+381641112222",
+    });
     const [row] = await db.select().from(shops).where(eq(shops.id, shopId));
-    expect(row).toMatchObject({ name: "Novo ime", city: "Novi Sad", address: "Bulevar 1", phone: "+381641112222" });
+    expect(row).toMatchObject({
+      name: "Novo ime",
+      businessLabel: "Perionica",
+      city: "Novi Sad",
+      address: "Bulevar 1",
+      phone: "+381641112222",
+    });
   });
 
   describe("setup checklist", () => {

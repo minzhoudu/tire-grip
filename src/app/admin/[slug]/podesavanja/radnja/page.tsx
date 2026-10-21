@@ -13,7 +13,10 @@ export default async function ShopInfoPage({ params }: { params: Promise<{ slug:
         title="Podaci radnje"
         description="Naziv, grad, adresa i telefon koje kupci vide na stranici za zakazivanje."
       />
-      <ShopInfoForm slug={slug} shop={{ name: shop.name, city: shop.city, address: shop.address, phone: shop.phone }} />
+      <ShopInfoForm
+        slug={slug}
+        shop={{ name: shop.name, businessLabel: shop.businessLabel, city: shop.city, address: shop.address, phone: shop.phone }}
+      />
     </div>
   );
 }
