@@ -13,11 +13,14 @@ import {
   getDayAvailability,
   listBookableDays,
   shopToday,
+  utcToZoned,
   zonedToUtc,
 } from "@/lib/availability";
+import { formatMinutes } from "@/lib/availability/zoned";
 import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/lib/booking/request";
-import { formatPhone, whatsappLink } from "@/lib/phone";
+import { formatPhone, normalizePhone, whatsappLink } from "@/lib/phone";
 import { createBookingRequest } from "@/server/bookings";
+import { findBookingsByPhone, getShopBasics } from "@/server/customers";
 import { getOrigin } from "@/server/origin";
 import { linkBookingToReminder } from "@/server/reminders";
 import { findOffer, loadBusy, loadShopContext } from "@/server/shops";
@@ -164,4 +167,55 @@ export async function submitBookingAction(raw: BookingRequestInput & { reminderT
     console.error("submitBookingAction failed", err);
     return { ok: false, reason: "error" };
   }
+}
+
+/* ------------------------------------------------------------------ "Moji termini" (phone lookup) */
+
+const lookupInput = z.object({ slug: z.string().min(1).max(80), phone: z.string().min(1) });
+
+export interface MyBooking {
+  id: string;
+  status: string;
+  dayLabel: string;
+  time: string;
+  serviceName: string;
+  serviceIcon: string | null;
+  priceRsd: number;
+  /** Still pending/confirmed and in the future — can be cancelled at /otkazi/{id}. */
+  upcoming: boolean;
+}
+
+export type LookupMyBookingsResult = { ok: true; bookings: MyBooking[] } | { ok: false; reason: "invalid" | "not_found" };
+
+/** Public — no session, just a phone number. Same "not_found" for an unknown phone or a known one with no bookings (don't reveal which). */
+export async function lookupMyBookingsAction(raw: z.input<typeof lookupInput>): Promise<LookupMyBookingsResult> {
+  const parsed = lookupInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, reason: "invalid" };
+  const phone = normalizePhone(parsed.data.phone);
+  if (!phone) return { ok: false, reason: "invalid" };
+
+  const db = getDb();
+  const shop = await getShopBasics(db, parsed.data.slug);
+  if (!shop) return { ok: false, reason: "not_found" };
+
+  const rows = await findBookingsByPhone(db, shop.id, phone);
+  if (!rows || rows.length === 0) return { ok: false, reason: "not_found" };
+
+  const now = Date.now();
+  return {
+    ok: true,
+    bookings: rows.map((b) => {
+      const local = utcToZoned(b.startsAt, shop.timezone);
+      return {
+        id: b.id,
+        status: b.status,
+        dayLabel: dayLongLabel(local.date),
+        time: formatMinutes(local.minutes),
+        serviceName: b.serviceName,
+        serviceIcon: b.serviceIcon,
+        priceRsd: b.priceRsd,
+        upcoming: b.startsAt.getTime() > now && (b.status === "pending" || b.status === "confirmed"),
+      };
+    }),
+  };
 }

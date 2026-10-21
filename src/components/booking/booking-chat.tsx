@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useReducer, useRef, useState, useTransition } from "react";
 import {
   getDaysAction,
@@ -118,6 +119,12 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
           <p className="mt-2">Zakažite termin za 30 sekundi, bez zvanja i bez čekanja u redu.</p>
           {flow.step === "service" && (
             <>
+              <p className="mt-2 text-sm text-slate-500">
+                Već imate zakazan termin?{" "}
+                <Link href={`/${shop.slug}/moji-termini`} className="font-semibold text-navy-700 underline">
+                  Pogledajte svoje termine
+                </Link>
+              </p>
               <Chips>
                 {shop.services.map((s) => (
                   <Chip

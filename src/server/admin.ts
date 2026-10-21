@@ -103,6 +103,14 @@ export async function listBookings(
     .limit(200);
 }
 
+/** Everything this customer has ever booked at this shop, newest first — for the admin's customer history view. */
+export async function listCustomerBookings(db: DB, shopId: string, customerId: string): Promise<AdminBooking[]> {
+  return bookingQuery(db)
+    .where(and(eq(bookings.shopId, shopId), eq(bookings.customerId, customerId)))
+    .orderBy(desc(bookings.startsAt))
+    .limit(100);
+}
+
 export async function getBooking(db: DB, shopId: string, bookingId: string): Promise<AdminBooking | null> {
   const [row] = await bookingQuery(db)
     .where(and(eq(bookings.shopId, shopId), eq(bookings.id, bookingId)))

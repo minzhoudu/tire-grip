@@ -29,6 +29,9 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           <Link href="/platforma/nalozi" className="rounded-full px-3 py-1.5 hover:bg-white/10">
             Nalozi
           </Link>
+          <Link href="/platforma/statistika" className="rounded-full px-3 py-1.5 hover:bg-white/10">
+            Statistika
+          </Link>
         </nav>
         <div className="hazard-stripe -mx-4 mt-3 md:-mx-10" />
       </header>

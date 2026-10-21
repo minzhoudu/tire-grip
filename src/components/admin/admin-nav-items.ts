@@ -10,6 +10,7 @@ export function getAdminNavItems(base: string, pending: number, isOwner: boolean
     { href: base, label: "Zahtevi", badge: pending },
     { href: `${base}/novi`, label: "+ Novi termin" },
     { href: `${base}/blokade`, label: "Blokade" },
+    { href: `${base}/kupci`, label: "Kupci" },
     ...(isOwner ? [{ href: `${base}/statistika`, label: "Statistika" }] : []),
     ...(isOwner ? [{ href: `${base}/podsetnici`, label: "Podsetnici" }] : []),
     ...(isOwner ? [{ href: `${base}/podesavanja`, label: "Podešavanja" }] : []),
