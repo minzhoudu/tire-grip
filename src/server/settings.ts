@@ -475,7 +475,7 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
       href: `${base}/pravila`,
       icon: "⚙️",
       title: "Pravila zakazivanja",
-      subtitle: `${shop.bays} ${shop.bays === 1 ? "dizalica" : "dizalice"} · ${shop.slotStepMin} min korak · auto-potvrda ${shop.autoConfirm ? "uključena" : "isključena"}`,
+      subtitle: `${shop.bays} ${shop.bays === 1 ? "boks" : shop.bays <= 4 ? "boksa" : "boksova"} · ${shop.slotStepMin} min korak · auto-potvrda ${shop.autoConfirm ? "uključena" : "isključena"}`,
     },
     {
       href: `${base}/radno-vreme`,

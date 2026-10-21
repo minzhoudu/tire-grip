@@ -94,7 +94,7 @@ export async function updateBookingRulesAction(raw: z.input<typeof bookingRulesI
   if (!result.ok) {
     return {
       ok: false,
-      error: `Ne može: ${result.count} zakazan(ih) termin(a) je na dizalici koja bi nestala. Prebacite ih ili otkažite, pa probajte ponovo.`,
+      error: `Ne može: ${result.count} zakazan(ih) termin(a) je na boksu koji bi nestao. Prebacite ih ili otkažite, pa probajte ponovo.`,
     };
   }
   return { ok: true };

@@ -16,7 +16,7 @@ export interface BookingRules {
 }
 
 const FIELDS: { key: keyof Omit<BookingRules, "autoConfirm">; label: string; min: number; max: number; step: number; suffix: string }[] = [
-  { key: "bays", label: "Broj dizalica", min: 1, max: 20, step: 1, suffix: "" },
+  { key: "bays", label: "Broj boksova", min: 1, max: 20, step: 1, suffix: "" },
   { key: "slotStepMin", label: "Korak termina", min: 5, max: 240, step: 5, suffix: "min" },
   { key: "bookingHorizonDays", label: "Horizont zakazivanja", min: 1, max: 120, step: 1, suffix: "dana" },
   { key: "minNoticeMin", label: "Minimalna najava", min: 0, max: 2880, step: 5, suffix: "min" },

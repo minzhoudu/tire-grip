@@ -11,7 +11,7 @@ const input =
 function BaySelector({ bays, value, onChange }: { bays: number; value: number | null; onChange: (v: number | null) => void }) {
   const options: { value: number | null; label: string }[] = [
     { value: null, label: "Sve" },
-    ...Array.from({ length: bays }, (_, i) => ({ value: i + 1, label: `Dizalica ${i + 1}` })),
+    ...Array.from({ length: bays }, (_, i) => ({ value: i + 1, label: `Boks ${i + 1}` })),
   ];
   return (
     <div className="flex flex-wrap gap-2">
@@ -80,7 +80,7 @@ export function BlockForm({ slug, bays, today }: { slug: string; bays: number; t
       </div>
       {bays > 1 && (
         <div>
-          <span className="text-sm font-semibold text-slate-700">Dizalica</span>
+          <span className="text-sm font-semibold text-slate-700">Boks</span>
           <div className="mt-1.5">
             <BaySelector bays={bays} value={bay} onChange={setBay} />
           </div>
@@ -88,7 +88,7 @@ export function BlockForm({ slug, bays, today }: { slug: string; bays: number; t
       )}
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Razlog (vidite samo vi)</span>
-        <input className={`${input} mt-1.5`} placeholder="npr. pauza, servis dizalice" maxLength={120} value={reason} onChange={(e) => setReason(e.target.value)} />
+        <input className={`${input} mt-1.5`} placeholder="npr. pauza, servis boksa" maxLength={120} value={reason} onChange={(e) => setReason(e.target.value)} />
       </label>
       {warning && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{warning}</p>}
       <button

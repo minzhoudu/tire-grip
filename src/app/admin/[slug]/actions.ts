@@ -151,7 +151,7 @@ export async function createBlockAction(raw: z.input<typeof blockInput>): Promis
     reason: input.data.reason,
   });
   if (!result.ok) {
-    return { ok: false, error: result.reason === "invalid_range" ? "Vreme „do“ mora biti posle vremena „od“." : "Nepostojeća dizalica." };
+    return { ok: false, error: result.reason === "invalid_range" ? "Vreme „do“ mora biti posle vremena „od“." : "Nepostojeći boks." };
   }
   return { ok: true, overlappingBookings: result.overlappingBookings };
 }

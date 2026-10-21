@@ -7,7 +7,7 @@
  * customer, vehicle or service.
  *
  * Double booking is prevented in the database, not only in the app:
- * each booking occupies one "bay" (dizalica) for [starts_at, ends_at), and an
+ * each booking occupies one "bay" (boks) for [starts_at, ends_at), and an
  * exclusion constraint forbids two active bookings on the same bay with
  * overlapping time ranges. See drizzle/0001_booking_no_overlap.sql.
  *

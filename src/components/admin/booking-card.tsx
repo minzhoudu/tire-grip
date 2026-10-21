@@ -105,7 +105,7 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
           <p className="font-mono text-xl font-bold tabular-nums">{b.timeRange}</p>
           <p className="mt-0.5 text-sm text-slate-600">
             {b.serviceName} · {b.vehicleTypeIcon} {b.vehicleTypeLabel}
-            {b.bay !== null && <> · dizalica {b.bay}</>}
+            {b.bay !== null && <> · boks {b.bay}</>}
           </p>
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${cancelledByCustomer ? CANCELLED_BY_CUSTOMER_STYLE : STATUS_STYLES[status]}`}>
