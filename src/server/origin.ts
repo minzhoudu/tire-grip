@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { isLiveProduction, PROD_ROOT_DOMAIN } from "../lib/subdomain.ts";
+import { isLiveProduction, PROD_ROOT_DOMAIN, subdomainOf } from "../lib/subdomain.ts";
 
 /** Public origin for links in messages (https://app.example.rs). */
 export async function getOrigin(): Promise<string> {
@@ -19,4 +19,32 @@ export function shopPublicUrl(slug: string, origin: string): string {
 /** Absolute link to a shop's admin panel, for cross-subdomain navigation (platform admin, the bare-domain shop picker). */
 export function shopAdminUrl(slug: string): string {
   return isLiveProduction() ? `https://${slug}.${PROD_ROOT_DOMAIN}/admin` : `/admin/${slug}`;
+}
+
+/** The current request's host with any {sub}. prefix stripped — the bare root domain it belongs to. */
+async function currentRootHost(): Promise<string> {
+  const host = (await headers()).get("host") ?? PROD_ROOT_DOMAIN;
+  const sub = subdomainOf(host);
+  return sub ? host.slice(sub.length + 1) : host;
+}
+
+/** Absolute link to the platform dashboard — always platform.{root}, even called from a shop's own subdomain. */
+export async function platformUrl(): Promise<string> {
+  const root = await currentRootHost();
+  if (subdomainOf((await headers()).get("host")) === "platform") return "/platforma"; // already there
+  const proto = root.startsWith("localhost") ? "http" : "https";
+  return `${proto}://platform.${root}/platforma`;
+}
+
+/**
+ * Absolute link to /prijava on the bare root domain. Signing out must always leave whatever
+ * subdomain you were on — otherwise logging into a different account there can 404: the next
+ * login with no `next` defaults to /admin, which middleware ties to THIS subdomain's shop.
+ */
+export async function rootLoginUrl(): Promise<string> {
+  const host = (await headers()).get("host");
+  if (!subdomainOf(host)) return "/prijava"; // already on the bare domain
+  const root = await currentRootHost();
+  const proto = root.startsWith("localhost") ? "http" : "https";
+  return `${proto}://${root}/prijava`;
 }

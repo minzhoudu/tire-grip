@@ -23,7 +23,7 @@ import {
 } from "@/server/admin";
 import { getAuth } from "@/server/auth";
 import { createBookingRequest } from "@/server/bookings";
-import { getOrigin } from "@/server/origin";
+import { getOrigin, platformUrl, rootLoginUrl } from "@/server/origin";
 import { endImpersonation, IMPERSONATION_COOKIE, logPlatformAction } from "@/server/platform";
 import { requireShopAccess, requireUser } from "@/server/session";
 import { loadShopContext } from "@/server/shops";
@@ -167,7 +167,7 @@ export async function deleteBlockAction(raw: { slug: string; blockId: string }):
 
 export async function signOutAction(): Promise<void> {
   await getAuth().api.signOut({ headers: await headers() });
-  redirect("/prijava");
+  redirect(await rootLoginUrl());
 }
 
 /** Ends the current "Uđi kao" support session, if any, and sends the admin back to the platform dashboard. */
@@ -180,5 +180,5 @@ export async function endImpersonationAction(): Promise<void> {
     if (ended) await logPlatformAction(getDb(), { adminUserId: user.id, shopId: ended.shopId, action: "impersonation_ended" });
   }
   jar.delete(IMPERSONATION_COOKIE);
-  redirect("/platforma");
+  redirect(await platformUrl());
 }
