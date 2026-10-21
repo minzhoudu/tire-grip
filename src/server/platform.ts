@@ -97,6 +97,16 @@ export async function resetUserPassword(db: DB, userId: string, newPassword: str
   return rows.length > 0;
 }
 
+/**
+ * Deletes an account entirely — sessions, credentials and shop memberships cascade. Any shop
+ * left without an owner can get a new one via assignOwner(). Returns the deleted account's
+ * name/email for the audit log, since the id is gone once this returns.
+ */
+export async function deleteUser(db: DB, userId: string): Promise<{ name: string; email: string } | null> {
+  const rows = await db.delete(users).where(eq(users.id, userId)).returning({ name: users.name, email: users.email });
+  return rows[0] ?? null;
+}
+
 export async function logPlatformAction(
   db: DB,
   input: { adminUserId: string; shopId?: string | null; action: string; details?: string | null },

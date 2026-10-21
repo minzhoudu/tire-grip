@@ -17,6 +17,7 @@ import {
   assignOwner,
   changeShopPlan,
   deleteShop,
+  deleteUser,
   IMPERSONATION_COOKIE,
   logPlatformAction,
   rejectShop,
@@ -118,6 +119,20 @@ export async function resetUserPasswordAction(raw: z.input<typeof resetPasswordI
   const ok = await resetUserPassword(getDb(), input.data.userId, input.data.newPassword);
   if (!ok) return { ok: false, error: "Nalog nije pronađen." };
   await logPlatformAction(getDb(), { adminUserId: admin.id, action: "password_reset", details: `userId=${input.data.userId}` });
+  return { ok: true };
+}
+
+const userIdInput = z.object({ userId: z.string().min(1) });
+
+/** Permanently deletes an account — sessions, credentials and shop memberships cascade. */
+export async function deleteUserAction(raw: z.input<typeof userIdInput>): Promise<PlatformActionResult> {
+  const input = userIdInput.safeParse(raw);
+  if (!input.success) return { ok: false, error: "Neispravan zahtev." };
+  const admin = await requirePlatformAdmin();
+  if (input.data.userId === admin.id) return { ok: false, error: "Ne možete obrisati sopstveni nalog." };
+  const deleted = await deleteUser(getDb(), input.data.userId);
+  if (!deleted) return { ok: false, error: "Nalog nije pronađen." };
+  await logPlatformAction(getDb(), { adminUserId: admin.id, action: "user_deleted", details: `${deleted.name} (${deleted.email})` });
   return { ok: true };
 }
 

@@ -14,6 +14,7 @@ import {
   assignOwner,
   changeShopPlan,
   deleteShop,
+  deleteUser,
   endImpersonation,
   getImpersonatedShop,
   listAllShops,
@@ -150,6 +151,23 @@ describe.skipIf(!process.env.DATABASE_URL)("platform dashboard (Postgres)", () =
 
     expect(await deleteShop(db, shop!.id)).toBeNull(); // already gone
     await db.delete(users).where(eq(users.id, deleteUserId));
+  });
+
+  it("deletes a user and cascades to their shop membership, leaving the shop itself untouched", async () => {
+    const db = getDb();
+    const id = `it-delete-user-${run}`;
+    await db.insert(users).values({ id, email: `delete-user-${run}@example.rs`, name: "Za brisanje", emailVerified: true });
+    await db.insert(shopMembers).values({ shopId: approvedShopId, userId: id, role: "staff" });
+
+    const deleted = await deleteUser(db, id);
+    expect(deleted).toMatchObject({ name: "Za brisanje", email: `delete-user-${run}@example.rs` });
+
+    expect(await db.select().from(users).where(eq(users.id, id))).toHaveLength(0);
+    expect(await db.select().from(shopMembers).where(eq(shopMembers.userId, id))).toHaveLength(0);
+    // the shop itself is unaffected
+    expect(await db.select().from(shops).where(eq(shops.id, approvedShopId))).toHaveLength(1);
+
+    expect(await deleteUser(db, id)).toBeNull(); // already gone
   });
 
   describe("assignOwner", () => {
