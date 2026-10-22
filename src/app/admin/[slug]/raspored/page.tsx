@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { getDb } from "@/db";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { DaySchedule, type ScheduleItem } from "@/components/admin/day-schedule";
 import { PlanUpgradeNotice } from "@/components/admin/plan-upgrade-notice";
+import { ScheduleDayNav } from "@/components/admin/schedule-day-nav";
 import { addDays, dayChipLabel, dayLongLabel, hoursForDate, shopToday, utcToZoned } from "@/lib/availability";
 import { hasFeature } from "@/lib/plan";
 import { listDayBlocks, listDayBookings, toBookingCardData } from "@/server/admin";
@@ -72,39 +72,31 @@ export default async function SchedulePage({ params, searchParams }: Props) {
         <p className="text-sm text-slate-600">Ko je kada u kom boksu. Dodirnite termin za detalje i akcije.</p>
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border-2 border-navy-900 bg-white p-1">
-        <Link href={href(addDays(date, -1))} aria-label="Prethodni dan" className="grid size-10 place-items-center rounded-lg text-xl font-bold">
-          ‹
-        </Link>
-        <p className="flex-1 text-center font-semibold">{title}</p>
-        <Link href={href(addDays(date, 1))} aria-label="Sledeći dan" className="grid size-10 place-items-center rounded-lg text-xl font-bold">
-          ›
-        </Link>
-      </div>
-      {date !== today && (
-        <Link href={href(today)} className="-mt-2 self-center text-sm font-semibold text-navy-700 underline">
-          Nazad na danas
-        </Link>
-      )}
-
-      {endMin === startMin ? (
-        <div className="rounded-2xl border-2 border-navy-900 bg-white p-6 text-center text-slate-600">
-          <p className="text-3xl" aria-hidden>
-            🔒
-          </p>
-          <p className="mt-2 font-semibold">Zatvoreno, nema termina.</p>
-        </div>
-      ) : (
-        <DaySchedule
-          slug={slug}
-          bays={shop.bays}
-          startMin={startMin}
-          endMin={endMin}
-          items={items}
-          blocks={blocks}
-          nowMin={date === today ? nowLocal.minutes : null}
-        />
-      )}
+      <ScheduleDayNav
+        title={title}
+        prevHref={href(addDays(date, -1))}
+        nextHref={href(addDays(date, 1))}
+        todayHref={date === today ? null : href(today)}
+      >
+        {endMin === startMin ? (
+          <div className="rounded-2xl border-2 border-navy-900 bg-white p-6 text-center text-slate-600">
+            <p className="text-3xl" aria-hidden>
+              🔒
+            </p>
+            <p className="mt-2 font-semibold">Zatvoreno, nema termina.</p>
+          </div>
+        ) : (
+          <DaySchedule
+            slug={slug}
+            bays={shop.bays}
+            startMin={startMin}
+            endMin={endMin}
+            items={items}
+            blocks={blocks}
+            nowMin={date === today ? nowLocal.minutes : null}
+          />
+        )}
+      </ScheduleDayNav>
     </div>
   );
 }
