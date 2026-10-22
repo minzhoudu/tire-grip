@@ -680,7 +680,7 @@ function PriceList({ services, vehicleTypes }: { services: PublicService[]; vehi
             <th className="py-1 pr-2 font-medium">Usluga</th>
             {used.map((vt) => (
               <th key={vt.id} className="py-1 pl-2 text-right font-medium" title={vt.label}>
-                {vt.icon}
+                {vt.icon || vt.label}
               </th>
             ))}
           </tr>
@@ -701,7 +701,15 @@ function PriceList({ services, vehicleTypes }: { services: PublicService[]; vehi
           ))}
         </tbody>
       </table>
-      <p className="mt-2 text-xs text-slate-500">{used.map((vt) => `${vt.icon} ${vt.label}`).join(" · ")}</p>
+      {/* Explains the icon-only column headers; a type without an icon already shows its name up there. */}
+      {used.some((vt) => vt.icon) && (
+        <p className="mt-2 text-xs text-slate-500">
+          {used
+            .filter((vt) => vt.icon)
+            .map((vt) => `${vt.icon} ${vt.label}`)
+            .join(" · ")}
+        </p>
+      )}
     </div>
   );
 }
