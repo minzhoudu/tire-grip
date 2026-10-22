@@ -54,6 +54,12 @@ export async function rootLoginUrl(): Promise<string> {
   return toRootUrl("/prijava");
 }
 
+/** Where a signed-in user with no explicit ?next= should land: /platforma on platform.*, /admin everywhere else. */
+export async function defaultLoginTarget(): Promise<string> {
+  const host = (await headers()).get("host");
+  return subdomainOf(host) === "platform" ? "/platforma" : "/admin";
+}
+
 /** Absolute link to the "add another shop" form, for a link in a shop's own admin panel (which lives on that shop's subdomain). */
 export async function addShopUrl(): Promise<string> {
   return toRootUrl("/admin/nova-radnja");

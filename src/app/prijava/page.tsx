@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { safeNextPath } from "@/lib/safe-next";
+import { defaultLoginTarget } from "@/server/origin";
 import { getSessionUser } from "@/server/session";
 import { LoginForm } from "./login-form";
 
@@ -12,7 +13,7 @@ type Props = { searchParams: Promise<{ next?: string; reset?: string }> };
 export default async function LoginPage({ searchParams }: Props) {
   await connection();
   const { next, reset } = await searchParams;
-  const target = safeNextPath(next);
+  const target = safeNextPath(next, await defaultLoginTarget());
   if (await getSessionUser()) redirect(target);
 
   return (

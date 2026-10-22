@@ -18,7 +18,8 @@ export function LoginForm({ next }: { next: string }) {
     setPending(true);
     // callbackURL only matters if the account isn't verified yet — it's where the re-sent
     // verification link lands after it's clicked (see emailVerification.sendOnSignIn in auth.ts).
-    const { error } = await authClient.signIn.email({ email: email.trim(), password, rememberMe: true, callbackURL: "/admin" });
+    // `next` is already host-aware (/admin on a shop subdomain, /platforma on platform.*).
+    const { error } = await authClient.signIn.email({ email: email.trim(), password, rememberMe: true, callbackURL: next });
     if (error) {
       setPending(false);
       setError(

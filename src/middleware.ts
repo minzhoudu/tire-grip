@@ -12,7 +12,7 @@ import { subdomainOf } from "./lib/subdomain.ts";
  * `/admin/{slug}` path once you're already on that shop's own subdomain. The `/admin/{slug}`
  * idempotent check below is just a safety net for a stray old-style link.
  */
-const PASSTHROUGH_PREFIXES = ["/prijava", "/registracija", "/api/auth"];
+const PASSTHROUGH_PREFIXES = ["/prijava", "/registracija", "/zaboravljena-lozinka", "/resetuj-lozinku", "/api/auth"];
 
 function isPassthrough(pathname: string): boolean {
   return PASSTHROUGH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

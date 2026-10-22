@@ -83,6 +83,12 @@ describe("safeNextPath", () => {
     ["/admin\\..\\x", "/admin"],
     ["/platforma\\..\\x", "/admin"],
   ])("%s → %s", (next, expected) => {
-    expect(safeNextPath(next)).toBe(expected);
+    expect(safeNextPath(next, "/admin")).toBe(expected);
+  });
+
+  it("falls back to the given default when next is empty or unsafe", () => {
+    expect(safeNextPath(undefined, "/platforma")).toBe("/platforma");
+    expect(safeNextPath("https://evil.example", "/platforma")).toBe("/platforma");
+    expect(safeNextPath("/platforma/statistika", "/admin")).toBe("/platforma/statistika");
   });
 });
