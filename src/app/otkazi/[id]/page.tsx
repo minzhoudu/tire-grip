@@ -8,7 +8,7 @@ import { formatMinutes } from "@/lib/availability/zoned";
 import { canSelfCancel, getCancellableBooking } from "@/server/cancel";
 import { CancelForm } from "./cancel-form";
 
-export const metadata: Metadata = { title: "Otkazivanje termina · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Otkazivanje termina | Moj Vulkanizer", robots: { index: false } };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

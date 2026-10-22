@@ -14,7 +14,7 @@ export default async function VehicleTypesPage({ params }: { params: Promise<{ s
       <SubpageHeader
         base={await getAdminBase(slug)}
         title="Vrste vozila"
-        description="Tipovi vozila koje servisirate — svaka usluga ima svoju cenu po vrsti vozila, pa ovo podesite pre Usluga i cena."
+        description="Tipovi vozila koje servisirate. Svaka usluga ima svoju cenu po vrsti vozila, pa ovo podesite pre Usluga i cena."
       />
       <VehicleTypesEditor slug={slug} vehicleTypes={vehicleTypes} />
     </div>

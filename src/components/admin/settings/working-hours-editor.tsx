@@ -124,7 +124,7 @@ export function WorkingHoursEditor({ slug, weeklyHours }: { slug: string; weekly
               </li>
             ))}
           </ul>
-          <p className="mt-1">Oni nisu pomereni ni otkazani — javite tim kupcima.</p>
+          <p className="mt-1">Oni nisu pomereni ni otkazani, javite se tim kupcima.</p>
         </div>
       )}
 

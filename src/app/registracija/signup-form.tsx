@@ -168,7 +168,7 @@ export function SignupForm() {
       >
         {pending ? "Šaljem…" : "Registruj radnju"}
       </button>
-      <p className="text-center text-xs text-slate-500">Radnja ide na pregled — javićemo vam se na broj koji ste uneli.</p>
+      <p className="text-center text-xs text-slate-500">Radnja ide na pregled. Javićemo vam se na broj koji ste uneli.</p>
     </form>
   );
 }

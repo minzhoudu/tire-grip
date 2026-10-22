@@ -6,7 +6,7 @@ import { getDb } from "@/db";
 import { getReminderByToken } from "@/server/reminders";
 import { OptOutButton } from "./opt-out-button";
 
-export const metadata: Metadata = { title: "Podsetnik za zamenu guma · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Podsetnik za zamenu guma | Moj Vulkanizer", robots: { index: false } };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

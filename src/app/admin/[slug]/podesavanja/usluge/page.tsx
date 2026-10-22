@@ -18,7 +18,7 @@ export default async function ServicesPage({ params }: { params: Promise<{ slug:
 
   return (
     <div className="flex flex-col gap-4">
-      <SubpageHeader base={base} title="Usluge i cene" description="Šta nudite, po kojoj ceni i za koliko vremena — po vrsti vozila." />
+      <SubpageHeader base={base} title="Usluge i cene" description="Šta nudite, po kojoj ceni i za koliko vremena, za svaku vrstu vozila." />
       {!hasActiveVehicleType && (
         <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">Prvo podesite bar jednu vrstu vozila</p>

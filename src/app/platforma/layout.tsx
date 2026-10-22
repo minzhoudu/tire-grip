@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { requirePlatformAdmin } from "@/server/session";
 import { signOutAction } from "../admin/[slug]/actions";
 
-export const metadata: Metadata = { title: "Platforma · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Platforma | Moj Vulkanizer", robots: { index: false } };
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
   await connection();

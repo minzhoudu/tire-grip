@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { ResetPasswordForm } from "./reset-password-form";
 
-export const metadata: Metadata = { title: "Nova lozinka · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Nova lozinka | Moj Vulkanizer", robots: { index: false } };
 
 export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string; error?: string }> }) {
   await connection();

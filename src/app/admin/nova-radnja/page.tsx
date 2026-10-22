@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { requireUser } from "@/server/session";
 import { AddShopForm } from "./add-shop-form";
 
-export const metadata: Metadata = { title: "Nova radnja · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Nova radnja | Moj Vulkanizer", robots: { index: false } };
 
 export default async function AddShopPage() {
   await connection();

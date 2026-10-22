@@ -70,7 +70,7 @@ export function AddShopForm() {
     return (
       <div className="rounded-2xl border-2 border-navy-900 bg-white p-5 text-center">
         <p className="font-mono text-lg font-bold">✅ Poslato</p>
-        <p className="mt-2 text-sm text-slate-600">Nova radnja ide na pregled — javićemo se kad bude odobrena.</p>
+        <p className="mt-2 text-sm text-slate-600">Nova radnja ide na pregled. Javićemo se kad bude odobrena.</p>
         <button
           type="button"
           onClick={() => router.push("/admin")}
@@ -147,7 +147,7 @@ export function AddShopForm() {
       >
         {pending ? "Šaljem…" : "Dodaj radnju"}
       </button>
-      <p className="text-center text-xs text-slate-500">Nova radnja ide na pregled — javićemo se kad bude odobrena.</p>
+      <p className="text-center text-xs text-slate-500">Nova radnja ide na pregled. Javićemo se kad bude odobrena.</p>
     </form>
   );
 }

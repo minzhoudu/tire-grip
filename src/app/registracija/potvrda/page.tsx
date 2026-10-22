@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { ResendVerification } from "./resend-verification";
 
-export const metadata: Metadata = { title: "Potvrdite email · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Potvrdite email | Moj Vulkanizer", robots: { index: false } };
 
 export default async function SignupConfirmationPage({ searchParams }: { searchParams: Promise<{ email?: string }> }) {
   await connection();

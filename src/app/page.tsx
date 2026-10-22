@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Moj Vulkanizer — zakazivanje za vulkanizere",
+  title: "Moj Vulkanizer | Zakazivanje za vulkanizere",
   description: "Kupci zakazuju zamenu guma sami, bez zvanja. Vi samo potvrdite termin.",
 };
 
 const STEPS = [
-  { icon: "🔗", title: "Dobijete svoj link", text: "vasa-radnja.mojvulkanizer.com — podelite ga na WhatsApp, Instagram, Google profil radnje." },
+  { icon: "🔗", title: "Dobijete svoj link", text: "Vaš link je vasa-radnja.mojvulkanizer.com. Podelite ga na WhatsApp, Instagram i Google profil radnje." },
   { icon: "💬", title: "Kupac zakazuje sam", text: "Bira uslugu, vozilo i slobodan termin kroz kratak chat na telefonu. Bez zvanja, bez čekanja u redu." },
   { icon: "✅", title: "Vi samo potvrdite", text: "Zahtev stiže u panel, potvrdite ga jednim dodirom. Kupac dobija potvrdu na WhatsApp." },
 ];

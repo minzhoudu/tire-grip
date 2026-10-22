@@ -11,7 +11,7 @@ import { addShopUrl, getOrigin, shopAdminUrl, shopPublicUrl } from "@/server/ori
 import { getAdminBase, requireShopAccess } from "@/server/session";
 import { endImpersonationAction, signOutAction } from "./actions";
 
-export const metadata: Metadata = { title: "Panel · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Panel | Moj Vulkanizer", robots: { index: false } };
 
 export default async function AdminShopLayout({
   children,

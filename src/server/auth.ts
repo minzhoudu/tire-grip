@@ -42,12 +42,12 @@ function createAuth() {
       minPasswordLength: MIN_PASSWORD_LENGTH,
       requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
-        await sendEmail({ to: user.email, subject: "Resetujte lozinku · Moj Vulkanizer", html: resetPasswordEmailHtml(url) });
+        await sendEmail({ to: user.email, subject: "Resetujte lozinku | Moj Vulkanizer", html: resetPasswordEmailHtml(url) });
       },
     },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
-        await sendEmail({ to: user.email, subject: "Potvrdite email · Moj Vulkanizer", html: verifyEmailHtml(url) });
+        await sendEmail({ to: user.email, subject: "Potvrdite email | Moj Vulkanizer", html: verifyEmailHtml(url) });
       },
       // A sign-in attempt with an unverified email re-sends the link, so a lost first email isn't a dead end.
       sendOnSignIn: true,

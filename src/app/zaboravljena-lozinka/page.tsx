@@ -5,7 +5,7 @@ import { defaultLoginTarget } from "@/server/origin";
 import { getSessionUser } from "@/server/session";
 import { ForgotPasswordForm } from "./forgot-password-form";
 
-export const metadata: Metadata = { title: "Zaboravljena lozinka · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Zaboravljena lozinka | Moj Vulkanizer", robots: { index: false } };
 
 export default async function ForgotPasswordPage() {
   await connection();

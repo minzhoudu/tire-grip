@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ctx = await loadShopContext(getDb(), slug);
   if (!ctx) return { title: "Radnja nije pronađena" };
   return {
-    title: `Zakažite termin · ${ctx.shop.name}`,
+    title: `Zakažite termin | ${ctx.shop.name}`,
     description: `Zakažite zamenu guma u radnji ${ctx.shop.name}${ctx.shop.city ? `, ${ctx.shop.city}` : ""} bez zvanja i čekanja.`,
   };
 }

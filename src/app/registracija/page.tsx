@@ -5,7 +5,7 @@ import { defaultLoginTarget } from "@/server/origin";
 import { getSessionUser } from "@/server/session";
 import { SignupForm } from "./signup-form";
 
-export const metadata: Metadata = { title: "Registracija · Moj Vulkanizer" };
+export const metadata: Metadata = { title: "Registracija | Moj Vulkanizer" };
 
 export default async function SignupPage() {
   await connection();

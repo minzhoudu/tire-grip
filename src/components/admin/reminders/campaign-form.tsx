@@ -74,7 +74,7 @@ export function CampaignForm({ slug, base }: { slug: string; base: string }) {
           value={messageTemplate}
           onChange={(e) => setMessageTemplate(e.target.value)}
         />
-        <span className="mt-1 block text-xs text-slate-500">Dostupno: {"{ime}"}, {"{link}"}, {"{radnja}"} — bez vozila, kupac zakazuje za koje želi iz chata.</span>
+        <span className="mt-1 block text-xs text-slate-500">Dostupno: {"{ime}"}, {"{link}"}, {"{radnja}"}. Vozilo se ne navodi, kupac ga bira u chatu.</span>
       </label>
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Dnevni limit za slanje</span>

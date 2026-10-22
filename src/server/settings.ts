@@ -489,7 +489,7 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
       href: `${base}/radno-vreme`,
       icon: "🕒",
       title: "Radno vreme",
-      subtitle: openDays === 0 ? "Nije podešeno — kupci ne mogu da zakažu" : `Otvoreno ${openDays}/7 dana u nedelji`,
+      subtitle: openDays === 0 ? "Nije podešeno, kupci ne mogu da zakažu" : `Otvoreno ${openDays}/7 dana u nedelji`,
       incomplete: openDays === 0,
     },
     {
@@ -502,14 +502,14 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
       href: `${base}/usluge`,
       icon: "🛞",
       title: "Usluge i cene",
-      subtitle: activeServices === 0 ? "Nije podešeno — kupci nemaju šta da zakažu" : `${activeServices}/${services.length} aktivno`,
+      subtitle: activeServices === 0 ? "Nije podešeno, kupci nemaju šta da zakažu" : `${activeServices}/${services.length} aktivno`,
       incomplete: activeServices === 0,
     },
     {
       href: `${base}/vrste-vozila`,
       icon: "🚗",
       title: "Vrste vozila",
-      subtitle: activeVehicleTypes === 0 ? "Nije podešeno — podesite pre Usluga i cena" : `${activeVehicleTypes}/${vehicleTypesList.length} aktivno`,
+      subtitle: activeVehicleTypes === 0 ? "Nije podešeno, podesite pre Usluga i cena" : `${activeVehicleTypes}/${vehicleTypesList.length} aktivno`,
       incomplete: activeVehicleTypes === 0,
     },
   ];

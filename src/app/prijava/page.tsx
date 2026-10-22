@@ -6,7 +6,7 @@ import { defaultLoginTarget } from "@/server/origin";
 import { getSessionUser } from "@/server/session";
 import { LoginForm } from "./login-form";
 
-export const metadata: Metadata = { title: "Prijava · Moj Vulkanizer", robots: { index: false } };
+export const metadata: Metadata = { title: "Prijava | Moj Vulkanizer", robots: { index: false } };
 
 type Props = { searchParams: Promise<{ next?: string; reset?: string }> };
 

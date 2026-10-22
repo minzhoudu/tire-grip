@@ -17,6 +17,6 @@ export async function cancelBookingAction(raw: z.input<typeof input>): Promise<C
   if (result.ok) return { ok: true };
   return {
     ok: false,
-    error: result.reason === "not_found" ? "Termin nije pronađen." : "Ovaj termin više ne može da se otkaže ovde — kontaktirajte radnju.",
+    error: result.reason === "not_found" ? "Termin nije pronađen." : "Ovaj termin više ne može da se otkaže ovde. Kontaktirajte radnju.",
   };
 }

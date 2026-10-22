@@ -24,7 +24,7 @@ export function LoginForm({ next }: { next: string }) {
       setPending(false);
       setError(
         error.code === "EMAIL_NOT_VERIFIED"
-          ? "Niste potvrdili email. Poslali smo vam nov link — proverite inbox (i spam)."
+          ? "Niste potvrdili email. Poslali smo vam nov link, proverite inbox (i spam folder)."
           : error.status === 429
             ? "Previše pokušaja. Sačekajte malo pa probajte ponovo."
             : error.status === 401 || error.status === 400

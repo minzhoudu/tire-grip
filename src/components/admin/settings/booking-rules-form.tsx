@@ -27,7 +27,7 @@ const FIELDS: {
   {
     key: "bays",
     label: "Broj boksova",
-    note: "Koliko vozila možete da primite istovremeno — svaki termin zauzima jedan boks.",
+    note: "Koliko vozila možete da primite istovremeno. Svaki termin zauzima jedan boks.",
     min: 1,
     max: 20,
     step: 1,
@@ -54,7 +54,7 @@ const FIELDS: {
   {
     key: "minNoticeMin",
     label: "Minimalna najava",
-    note: "Najkraće vreme pre termina da bi kupac mogao da ga zakaže — sprečava zakazivanje u poslednji čas.",
+    note: "Najkraće vreme pre termina da bi kupac mogao da ga zakaže. Sprečava zakazivanje u poslednji čas.",
     min: 0,
     max: 2880,
     step: 5,
@@ -96,7 +96,7 @@ export function BookingRulesForm({ slug, rules }: { slug: string; rules: Booking
       ))}
       <ToggleRow
         title="Automatski potvrdi nove zahteve"
-        description="Bez čekanja na vas — termin se odmah potvrđuje"
+        description="Termin se odmah potvrđuje, bez čekanja na vas"
         checked={fields.autoConfirm}
         onChange={(v) => setFields((f) => ({ ...f, autoConfirm: v }))}
       />
