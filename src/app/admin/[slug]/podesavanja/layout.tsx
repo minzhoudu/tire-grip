@@ -21,7 +21,7 @@ export default async function SettingsLayout({
 
   return (
     <div className="md:flex md:items-start md:gap-6">
-      <aside className="hidden md:block md:w-80 md:shrink-0">
+      <aside className="hidden print:hidden! md:block md:w-80 md:shrink-0">
         <div className="px-1 pb-3">
           <h1 className="font-mono text-xl font-bold">Podešavanja</h1>
           <p className="text-sm text-slate-600">Vidljivo samo vlasniku radnje.</p>

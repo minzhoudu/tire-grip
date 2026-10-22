@@ -43,6 +43,16 @@ export function cancellationMessage(m: CustomerMessageInput): string {
   ].join("\n");
 }
 
+/** Shop → customer the day before a confirmed booking. */
+export function dayBeforeReminderMessage(m: CustomerMessageInput): string {
+  return [
+    `🔔 ${m.shopName}: podsetnik za sutra`,
+    `${m.serviceName}, ${m.dayLabel} u ${m.time}h.`,
+    ...(m.address ? [`Adresa: ${m.address}`] : []),
+    m.cancelUrl ? `Ako ne možete da dođete, otkažite ovde: ${m.cancelUrl}` : "Ako ne možete da dođete, javite nam. Vidimo se!",
+  ].join("\n");
+}
+
 /** Default starting point for a reminder campaign's editable message template. */
 export const DEFAULT_REMINDER_TEMPLATE = "Zdravo {ime}! Vreme je za zamenu guma u {radnja}. Zakažite termin: {link}";
 

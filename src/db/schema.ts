@@ -447,6 +447,8 @@ export const bookings = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     /** When the shop actually sent the customer the confirm/reject/cancel message — null after a status change the shop hasn't notified the customer about yet. */
     notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    /** When the shop sent the customer the day-before WhatsApp reminder (Zahtevi → "Podsetnici za sutra"). */
+    reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -57,6 +57,13 @@
       "when": 1792617762397,
       "tag": "0007_thin_unus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792672805784,
+      "tag": "0008_daffy_smiling_tiger",
+      "breakpoints": true
     }
   ]
 }

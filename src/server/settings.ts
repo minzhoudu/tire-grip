@@ -459,7 +459,7 @@ export interface SettingsSection {
   incomplete?: boolean;
 }
 
-/** The 5 settings categories with their live one-line summaries — shared by the mobile hub list and the desktop sidebar. `adminBase` comes from getAdminBase(shop.slug). */
+/** The settings categories with their live one-line summaries — shared by the mobile hub list and the desktop sidebar. `adminBase` comes from getAdminBase(shop.slug). */
 export async function listSettingsSections(db: DB, shop: Shop, adminBase: string): Promise<SettingsSection[]> {
   const [weeklyHours, exceptions, services, vehicleTypesList] = await Promise.all([
     listWorkingHours(db, shop.id),
@@ -478,6 +478,12 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
       icon: "🏪",
       title: "Podaci radnje",
       subtitle: [shop.city, shop.address].filter(Boolean).join(" · ") || "Naziv, grad, adresa, telefon",
+    },
+    {
+      href: `${base}/link`,
+      icon: "🔗",
+      title: "Link i QR kod za kupce",
+      subtitle: "Podelite link, odštampajte QR za pult",
     },
     {
       href: `${base}/pravila`,

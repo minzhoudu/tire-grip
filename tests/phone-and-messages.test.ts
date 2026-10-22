@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openStatusText } from "../src/lib/availability/labels.ts";
-import { confirmationMessage } from "../src/lib/booking/messages.ts";
+import { confirmationMessage, dayBeforeReminderMessage } from "../src/lib/booking/messages.ts";
 import { formatPhone, normalizePhone, whatsappLink } from "../src/lib/phone.ts";
 
 describe("normalizePhone", () => {
@@ -58,6 +58,25 @@ describe("confirmationMessage", () => {
     const text = confirmationMessage({ ...base, cancelUrl: "https://tiregrip.rs/otkazi/abc-123" });
     expect(text).toContain("Ako ne možete da dođete, otkažite ovde: https://tiregrip.rs/otkazi/abc-123");
     expect(text).not.toContain("javite nam");
+  });
+});
+
+describe("dayBeforeReminderMessage", () => {
+  it("says it's for tomorrow, with time, address and the cancel link", () => {
+    const text = dayBeforeReminderMessage({
+      shopName: "Vulkanizer Brzi Točak",
+      serviceName: "Zamena guma",
+      dayLabel: "petak 23.10.",
+      time: "08:30",
+      priceRsd: 1500,
+      address: "Bulevar 1, Novi Sad",
+      bookingUrl: "https://brzi-tocak.mojvulkanizer.com/",
+      cancelUrl: "https://mojvulkanizer.com/otkazi/abc-123",
+    });
+    expect(text).toContain("podsetnik za sutra");
+    expect(text).toContain("Zamena guma, petak 23.10. u 08:30h.");
+    expect(text).toContain("Adresa: Bulevar 1, Novi Sad");
+    expect(text).toContain("otkažite ovde: https://mojvulkanizer.com/otkazi/abc-123");
   });
 });
 

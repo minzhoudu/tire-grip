@@ -3,7 +3,8 @@ import { getDb } from "@/db";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { BookingCard, type BookingCardData } from "@/components/admin/booking-card";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist";
-import { dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
+import { TomorrowReminders, type ReminderItem } from "@/components/admin/tomorrow-reminders";
+import { addDays, dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
 import { allowedActions } from "@/lib/booking/status";
 import { customerMessageUrl, listBookings, notifyKindForStatus, type AdminView } from "@/server/admin";
@@ -29,10 +30,22 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   ]);
 
   // Group by local day, keeping the query's order.
+  const tomorrow = addDays(today, 1);
+  const reminders: ReminderItem[] = [];
   const groups = new Map<string, BookingCardData[]>();
   for (const b of rows) {
     const start = utcToZoned(b.startsAt, shop.timezone);
     const end = utcToZoned(b.endsAt, shop.timezone);
+    if (view === "upcoming" && b.status === "confirmed" && start.date === tomorrow) {
+      reminders.push({
+        id: b.id,
+        time: formatMinutes(start.minutes),
+        customerName: b.customerName,
+        serviceName: `${b.serviceIcon ?? ""} ${b.serviceName}`.trim(),
+        url: customerMessageUrl(b, shop, "reminder", origin),
+        sent: b.reminderSentAt !== null,
+      });
+    }
     const notifyKind = b.notifiedAt === null ? notifyKindForStatus(b.status) : null;
     const card: BookingCardData = {
       id: b.id,
@@ -67,6 +80,8 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       {view === "upcoming" && <AutoRefresh seconds={30} />}
 
       {view === "upcoming" && checklist && <SetupChecklistCard checklist={checklist} base={base} />}
+
+      {reminders.length > 0 && <TomorrowReminders slug={slug} dayLabel={dayLongLabel(tomorrow)} items={reminders} />}
 
       <div className="flex rounded-xl border-2 border-navy-900 bg-white p-1 text-sm font-semibold">
         {(

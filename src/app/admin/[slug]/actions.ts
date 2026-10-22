@@ -20,6 +20,7 @@ import {
   deleteBlock,
   getBooking,
   markNotified,
+  markReminderSent,
 } from "@/server/admin";
 import { getAuth } from "@/server/auth";
 import { createBookingRequest } from "@/server/bookings";
@@ -68,6 +69,13 @@ export async function markNotifiedAction(raw: { slug: string; bookingId: string 
   if (!input.success) return { ok: false };
   const { shop } = await requireShopAccess(input.data.slug);
   return { ok: await markNotified(getDb(), shop.id, input.data.bookingId) };
+}
+
+export async function markReminderSentAction(raw: { slug: string; bookingId: string }): Promise<{ ok: boolean }> {
+  const input = z.object({ slug: slugSchema, bookingId: z.uuid() }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireShopAccess(input.data.slug);
+  return { ok: await markReminderSent(getDb(), shop.id, input.data.bookingId) };
 }
 
 /* ------------------------------------------------------------------ manual booking */

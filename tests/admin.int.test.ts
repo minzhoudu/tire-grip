@@ -21,6 +21,7 @@ import {
   listBookings,
   listUpcomingBlocks,
   markNotified,
+  markReminderSent,
 } from "../src/server/admin.ts";
 import { getAuth } from "../src/server/auth.ts";
 import { createBookingRequest } from "../src/server/bookings.ts";
@@ -165,6 +166,24 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
     // a new notify-worthy action (cancel) means the customer hasn't heard about *this* status yet
     const cancelled = await changeBookingStatus(db, { shopId, bookingId: id, action: "cancel" });
     expect(cancelled.ok && cancelled.booking.notifiedAt).toBeNull();
+  });
+
+  it("records the day-before reminder only for a confirmed booking of this shop", async () => {
+    const db = getDb();
+    const r = await createBookingRequest(db, request({ phone: "064 700 0010", startsAt: at(date, 14) }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const id = r.booking.id;
+
+    expect(await markReminderSent(db, shopId, id)).toBe(false); // still pending
+    await changeBookingStatus(db, { shopId, bookingId: id, action: "confirm" });
+    expect(await markReminderSent(db, otherShopId, id)).toBe(false); // foreign shop
+    expect(await markReminderSent(db, shopId, id)).toBe(true);
+
+    const [row] = await db.select().from(bookings).where(eq(bookings.id, id));
+    expect(row!.reminderSentAt).not.toBeNull();
+    const listed = (await listBookings(db, { id: shopId, timezone: TZ }, "upcoming")).find((b) => b.id === id);
+    expect(listed?.reminderSentAt).not.toBeNull();
   });
 
   it("cancelling frees the slot and moves the booking to history", async () => {

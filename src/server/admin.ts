@@ -8,7 +8,7 @@ import type { DB } from "../db/index.ts";
 import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } from "../db/schema.ts";
 import { addDays, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
 import { formatMinutes } from "../lib/availability/zoned.ts";
-import { cancellationMessage, confirmationMessage, rejectionMessage } from "../lib/booking/messages.ts";
+import { cancellationMessage, confirmationMessage, dayBeforeReminderMessage, rejectionMessage } from "../lib/booking/messages.ts";
 import { ACTIONS, FINAL_STATUSES, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
 import { whatsappLink } from "../lib/phone.ts";
 import { ADMIN_HORIZON_DAYS } from "./bookings.ts";
@@ -37,6 +37,7 @@ export interface AdminBooking {
   createdAt: Date;
   cancelReason: string | null;
   notifiedAt: Date | null;
+  reminderSentAt: Date | null;
 }
 
 const bookingColumns = {
@@ -59,6 +60,7 @@ const bookingColumns = {
   createdAt: bookings.createdAt,
   cancelReason: bookings.cancelReason,
   notifiedAt: bookings.notifiedAt,
+  reminderSentAt: bookings.reminderSentAt,
 };
 
 function bookingQuery(db: DB) {
@@ -191,11 +193,11 @@ export function notifyKindForStatus(status: BookingStatus): "confirm" | "reject"
   return NOTIFY_KIND[status] ?? null;
 }
 
-/** wa.me link with the right message for confirm/reject/cancel — built fresh each time, so it always reflects the booking's current details. */
+/** wa.me link with the right message for confirm/reject/cancel/day-before reminder — built fresh each time, so it always reflects the booking's current details. */
 export function customerMessageUrl(
   booking: AdminBooking,
   shop: { name: string; slug: string; address: string | null; timezone: string },
-  kind: "confirm" | "reject" | "cancel",
+  kind: "confirm" | "reject" | "cancel" | "reminder",
   origin: string,
 ): string {
   const local = utcToZoned(booking.startsAt, shop.timezone);
@@ -207,11 +209,27 @@ export function customerMessageUrl(
     priceRsd: booking.priceRsd,
     address: shop.address,
     bookingUrl: shopPublicUrl(shop.slug, origin),
-    cancelUrl: kind === "confirm" ? `${origin}/otkazi/${booking.id}` : undefined,
+    cancelUrl: kind === "confirm" || kind === "reminder" ? `${origin}/otkazi/${booking.id}` : undefined,
   };
   const text =
-    kind === "confirm" ? confirmationMessage(input) : kind === "reject" ? rejectionMessage(input) : cancellationMessage(input);
+    kind === "confirm"
+      ? confirmationMessage(input)
+      : kind === "reject"
+        ? rejectionMessage(input)
+        : kind === "cancel"
+          ? cancellationMessage(input)
+          : dayBeforeReminderMessage(input);
   return whatsappLink(booking.customerPhone, text);
+}
+
+/** Records that the day-before reminder went out. Only for a still-confirmed booking; re-sending just moves the timestamp. */
+export async function markReminderSent(db: DB, shopId: string, bookingId: string): Promise<boolean> {
+  const updated = await db
+    .update(bookings)
+    .set({ reminderSentAt: new Date() })
+    .where(and(eq(bookings.shopId, shopId), eq(bookings.id, bookingId), eq(bookings.status, "confirmed")))
+    .returning({ id: bookings.id });
+  return updated.length > 0;
 }
 
 /* ------------------------------------------------------------ manual booking slots */
