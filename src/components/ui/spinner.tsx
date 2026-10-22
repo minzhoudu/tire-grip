@@ -2,7 +2,7 @@
 export function Spinner() {
   return (
     <div className="flex min-h-[50vh] items-center justify-center">
-      <div className="grid size-12 animate-spin place-items-center rounded-2xl bg-navy-900 text-2xl" aria-hidden>
+      <div className="grid size-12 animate-spin place-items-center rounded-full bg-navy-900 text-2xl" aria-hidden>
         🛞
       </div>
     </div>
