@@ -19,6 +19,8 @@ import {
   createBlock,
   deleteBlock,
   listBookings,
+  listDayBlocks,
+  listDayBookings,
   listUpcomingBlocks,
   markNotified,
   markReminderSent,
@@ -252,5 +254,26 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
     expect(await deleteBlock(db, shopId, block.id)).toBe(true);
     const after = (await adminDaySlots(db, ctx, swapId, carTypeId, date))!;
     expect(after.slots.find((s) => s.time === "12:30")!.available).toBe(true);
+  });
+
+  it("loads one day's bookings and blocked time for the per-bay schedule", async () => {
+    const db = getDb();
+    const shop = { id: shopId, timezone: TZ };
+    const day = addDays(date, 1);
+    const kept = await createBookingRequest(db, request({ phone: "064 700 0020", startsAt: at(day, 9) }));
+    const dropped = await createBookingRequest(db, request({ phone: "064 700 0021", startsAt: at(day, 10) }));
+    const otherDay = await createBookingRequest(db, request({ phone: "064 700 0022", startsAt: at(addDays(day, 1), 9) }));
+    expect(kept.ok && dropped.ok && otherDay.ok).toBe(true);
+    if (!kept.ok || !dropped.ok || !otherDay.ok) return;
+    await changeBookingStatus(db, { shopId, bookingId: dropped.booking.id, action: "reject" });
+    const block = await createBlock(db, { shopId, bays: 2, timezone: TZ, date: day, fromMin: 16 * 60, toMin: 17 * 60, bay: 2, reason: "kvar" });
+    expect(block.ok).toBe(true);
+
+    const ids = (await listDayBookings(db, shop, day)).map((b) => b.id);
+    expect(ids).toContain(kept.booking.id);
+    expect(ids).not.toContain(dropped.booking.id); // rejected doesn't occupy a bay
+    expect(ids).not.toContain(otherDay.booking.id);
+
+    expect(await listDayBlocks(db, shop, day)).toEqual([expect.objectContaining({ bay: 2, reason: "kvar", fromMin: 960, toMin: 1020 })]);
   });
 });

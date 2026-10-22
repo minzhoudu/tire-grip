@@ -3,10 +3,8 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { BookingCard, type BookingCardData } from "@/components/admin/booking-card";
 import { dayLongLabel, utcToZoned } from "@/lib/availability";
-import { formatMinutes } from "@/lib/availability/zoned";
-import { allowedActions } from "@/lib/booking/status";
 import { hasFeature } from "@/lib/plan";
-import { customerMessageUrl, listCustomerBookings, notifyKindForStatus } from "@/server/admin";
+import { listCustomerBookings, toBookingCardData } from "@/server/admin";
 import { getShopCustomer } from "@/server/customers";
 import { getOrigin } from "@/server/origin";
 import { getAdminBase, requireShopAccess } from "@/server/session";
@@ -28,28 +26,8 @@ export default async function CustomerHistoryPage({ params }: { params: Promise<
   const groups = new Map<string, BookingCardData[]>();
   for (const b of rows) {
     const start = utcToZoned(b.startsAt, shop.timezone);
-    const end = utcToZoned(b.endsAt, shop.timezone);
-    const notifyKind = b.notifiedAt === null ? notifyKindForStatus(b.status) : null;
-    const card: BookingCardData = {
-      id: b.id,
-      status: b.status,
-      actions: allowedActions(b.status, b.startsAt, now),
-      timeRange: `${formatMinutes(start.minutes)}–${formatMinutes(end.minutes)}`,
-      serviceName: `${b.serviceIcon ?? ""} ${b.serviceName}`.trim(),
-      vehicleTypeLabel: b.vehicleTypeLabel,
-      vehicleTypeIcon: b.vehicleTypeIcon,
-      vehicleLabel: b.vehicleLabel,
-      customerName: b.customerName,
-      customerPhone: b.customerPhone,
-      customerNote: b.customerNote,
-      priceRsd: b.priceRsd,
-      bay: shop.bays > 1 ? b.bay : null,
-      byPhone: b.source === "admin",
-      cancelReason: b.cancelReason,
-      notifyUrl: notifyKind ? customerMessageUrl(b, shop, notifyKind, origin) : null,
-    };
     const list = groups.get(start.date) ?? [];
-    list.push(card);
+    list.push(toBookingCardData(b, shop, origin, now));
     groups.set(start.date, list);
   }
 

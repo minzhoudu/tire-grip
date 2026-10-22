@@ -6,8 +6,7 @@ import { SetupChecklistCard } from "@/components/admin/setup-checklist";
 import { TomorrowReminders, type ReminderItem } from "@/components/admin/tomorrow-reminders";
 import { addDays, dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
-import { allowedActions } from "@/lib/booking/status";
-import { customerMessageUrl, listBookings, notifyKindForStatus, type AdminView } from "@/server/admin";
+import { customerMessageUrl, listBookings, toBookingCardData, type AdminView } from "@/server/admin";
 import { getOrigin } from "@/server/origin";
 import { getSetupChecklist } from "@/server/settings";
 import { getAdminBase, requireShopAccess } from "@/server/session";
@@ -35,7 +34,6 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const groups = new Map<string, BookingCardData[]>();
   for (const b of rows) {
     const start = utcToZoned(b.startsAt, shop.timezone);
-    const end = utcToZoned(b.endsAt, shop.timezone);
     if (view === "upcoming" && b.status === "confirmed" && start.date === tomorrow) {
       reminders.push({
         id: b.id,
@@ -46,27 +44,8 @@ export default async function RequestsPage({ params, searchParams }: Props) {
         sent: b.reminderSentAt !== null,
       });
     }
-    const notifyKind = b.notifiedAt === null ? notifyKindForStatus(b.status) : null;
-    const card: BookingCardData = {
-      id: b.id,
-      status: b.status,
-      actions: allowedActions(b.status, b.startsAt, now),
-      timeRange: `${formatMinutes(start.minutes)}–${formatMinutes(end.minutes)}`,
-      serviceName: `${b.serviceIcon ?? ""} ${b.serviceName}`.trim(),
-      vehicleTypeLabel: b.vehicleTypeLabel,
-      vehicleTypeIcon: b.vehicleTypeIcon,
-      vehicleLabel: b.vehicleLabel,
-      customerName: b.customerName,
-      customerPhone: b.customerPhone,
-      customerNote: b.customerNote,
-      priceRsd: b.priceRsd,
-      bay: shop.bays > 1 ? b.bay : null,
-      byPhone: b.source === "admin",
-      cancelReason: b.cancelReason,
-      notifyUrl: notifyKind ? customerMessageUrl(b, shop, notifyKind, origin) : null,
-    };
     const list = groups.get(start.date) ?? [];
-    list.push(card);
+    list.push(toBookingCardData(b, shop, origin, now));
     groups.set(start.date, list);
   }
 

@@ -1,6 +1,6 @@
 import type { Shop } from "../db/schema.ts";
 
-export type PlanFeature = "blokade" | "kupci" | "statistika" | "podsetnici";
+export type PlanFeature = "raspored" | "blokade" | "kupci" | "statistika" | "podsetnici";
 
 /** Basic has none of the gated features; Zahtevi/Novi termin/Podešavanja are always available to every plan. */
 const BASIC_FEATURES = new Set<PlanFeature>();

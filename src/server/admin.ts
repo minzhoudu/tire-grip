@@ -11,6 +11,7 @@ import { formatMinutes } from "../lib/availability/zoned.ts";
 import { cancellationMessage, confirmationMessage, dayBeforeReminderMessage, rejectionMessage } from "../lib/booking/messages.ts";
 import { ACTIONS, FINAL_STATUSES, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
 import { whatsappLink } from "../lib/phone.ts";
+import type { BookingCardData } from "../components/admin/booking-card.tsx";
 import { ADMIN_HORIZON_DAYS } from "./bookings.ts";
 import { shopPublicUrl } from "./origin.ts";
 import { ACTIVE_STATUSES, findOffer, loadBusy, type ShopContext } from "./shops.ts";
@@ -220,6 +221,74 @@ export function customerMessageUrl(
           ? cancellationMessage(input)
           : dayBeforeReminderMessage(input);
   return whatsappLink(booking.customerPhone, text);
+}
+
+/** Everything the admin BookingCard needs, from a booking row. */
+export function toBookingCardData(
+  b: AdminBooking,
+  shop: { name: string; slug: string; address: string | null; timezone: string; bays: number },
+  origin: string,
+  now = new Date(),
+): BookingCardData {
+  const start = utcToZoned(b.startsAt, shop.timezone);
+  const end = utcToZoned(b.endsAt, shop.timezone);
+  const notifyKind = b.notifiedAt === null ? notifyKindForStatus(b.status) : null;
+  return {
+    id: b.id,
+    status: b.status,
+    actions: allowedActions(b.status, b.startsAt, now),
+    timeRange: `${formatMinutes(start.minutes)}–${formatMinutes(end.minutes)}`,
+    serviceName: `${b.serviceIcon ?? ""} ${b.serviceName}`.trim(),
+    vehicleTypeLabel: b.vehicleTypeLabel,
+    vehicleTypeIcon: b.vehicleTypeIcon,
+    vehicleLabel: b.vehicleLabel,
+    customerName: b.customerName,
+    customerPhone: b.customerPhone,
+    customerNote: b.customerNote,
+    priceRsd: b.priceRsd,
+    bay: shop.bays > 1 ? b.bay : null,
+    byPhone: b.source === "admin",
+    cancelReason: b.cancelReason,
+    notifyUrl: notifyKind ? customerMessageUrl(b, shop, notifyKind, origin) : null,
+  };
+}
+
+/** Bookings that occupy a bay on one local day (pending, confirmed, done, no-show), for the per-bay schedule. */
+export async function listDayBookings(db: DB, shop: { id: string; timezone: string }, date: string): Promise<AdminBooking[]> {
+  const from = zonedToUtc(date, 0, shop.timezone);
+  const to = zonedToUtc(addDays(date, 1), 0, shop.timezone);
+  return bookingQuery(db)
+    .where(
+      and(
+        eq(bookings.shopId, shop.id),
+        inArray(bookings.status, [...ACTIVE_STATUSES, "no_show"]),
+        lt(bookings.startsAt, to),
+        gt(bookings.endsAt, from),
+      ),
+    )
+    .orderBy(asc(bookings.startsAt), asc(bookings.bay));
+}
+
+/** Blocked time overlapping one local day, as minutes within that day (clamped to it). */
+export async function listDayBlocks(db: DB, shop: { id: string; timezone: string }, date: string) {
+  const from = zonedToUtc(date, 0, shop.timezone);
+  const to = zonedToUtc(addDays(date, 1), 0, shop.timezone);
+  const rows = await db
+    .select()
+    .from(blockedTimes)
+    .where(and(eq(blockedTimes.shopId, shop.id), lt(blockedTimes.startsAt, to), gt(blockedTimes.endsAt, from)))
+    .orderBy(asc(blockedTimes.startsAt));
+  return rows.map((b) => {
+    const start = utcToZoned(b.startsAt, shop.timezone);
+    const end = utcToZoned(b.endsAt, shop.timezone);
+    return {
+      id: b.id,
+      bay: b.bay,
+      reason: b.reason,
+      fromMin: start.date < date ? 0 : start.minutes,
+      toMin: end.date > date ? 24 * 60 : end.minutes,
+    };
+  });
 }
 
 /** Records that the day-before reminder went out. Only for a still-confirmed booking; re-sending just moves the timestamp. */

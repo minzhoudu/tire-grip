@@ -29,6 +29,11 @@ body {
   background: repeating-linear-gradient(135deg, var(--color-accent-500) 0 14px, var(--color-navy-900) 14px 28px);
 }
 
+/* Blocked time in the per-bay schedule. */
+.hatched {
+  background: repeating-linear-gradient(135deg, #f1f5f9 0 6px, #ffffff 6px 12px);
+}
+
 @keyframes bubble-in {
   from {
     opacity: 0;
