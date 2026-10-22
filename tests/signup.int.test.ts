@@ -4,6 +4,7 @@
  * reflects that status so /admin can show the right message.
  */
 import "dotenv/config";
+import { isAPIError } from "better-auth/api";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
@@ -46,7 +47,7 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.BETTER_AUTH_SECRET)("p
     await closeDb();
   });
 
-  it("creates a pending, inactive shop with its owner, who can sign in afterwards", async () => {
+  it("creates a pending, inactive shop with its owner, unverified until the email link is clicked", async () => {
     const db = getDb();
     const auth = getAuth();
     const result = await registerShop(db, auth, input());
@@ -56,10 +57,18 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.BETTER_AUTH_SECRET)("p
     const [shop] = await db.select().from(shops).where(eq(shops.slug, slug));
     expect(shop).toMatchObject({ signupStatus: "pending", isActive: false, name: "IT Signup Radnja", city: "Kragujevac", phone: "+381641234567" });
 
+    const [user] = await db.select({ id: users.id, emailVerified: users.emailVerified }).from(users).where(eq(users.email, email));
+    expect(user?.emailVerified).toBe(false);
+
+    // Can't sign in until the verification link is clicked.
+    const blocked = await auth.api.signInEmail({ body: { email, password } }).catch((e: unknown) => e);
+    expect(isAPIError(blocked)).toBe(true);
+
+    // Simulates clicking the link (Better Auth flips emailVerified itself; we only assert the gate lifts).
+    await db.update(users).set({ emailVerified: true }).where(eq(users.id, user!.id));
     const signedIn = await auth.api.signInEmail({ body: { email, password } });
     expect(signedIn.user.email).toBe(email);
 
-    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
     const userShops = await listUserShops(db, user!.id);
     expect(userShops).toEqual([{ slug, name: "IT Signup Radnja", role: "owner", isActive: false, signupStatus: "pending" }]);
   });

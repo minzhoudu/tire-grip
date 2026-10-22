@@ -11,6 +11,8 @@ import { nextCookies } from "better-auth/next-js";
 import { getDb } from "../db/index.ts";
 import * as schema from "../db/schema.ts";
 import { isLiveProduction, PROD_ROOT_DOMAIN as ROOT_DOMAIN } from "../lib/subdomain.ts";
+import { resetPasswordEmailHtml, verifyEmailHtml } from "./email-templates.ts";
+import { sendEmail } from "./email.ts";
 
 export const MIN_PASSWORD_LENGTH = 10;
 
@@ -38,6 +40,19 @@ function createAuth() {
       enabled: true,
       disableSignUp: true,
       minPasswordLength: MIN_PASSWORD_LENGTH,
+      requireEmailVerification: true,
+      sendResetPassword: async ({ user, url }) => {
+        await sendEmail({ to: user.email, subject: "Resetujte lozinku · Moj Vulkanizer", html: resetPasswordEmailHtml(url) });
+      },
+    },
+    emailVerification: {
+      sendVerificationEmail: async ({ user, url }) => {
+        await sendEmail({ to: user.email, subject: "Potvrdite email · Moj Vulkanizer", html: verifyEmailHtml(url) });
+      },
+      // A sign-in attempt with an unverified email re-sends the link, so a lost first email isn't a dead end.
+      sendOnSignIn: true,
+      autoSignInAfterVerification: true,
+      expiresIn: 60 * 60,
     },
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days: owners stay signed in on their phone

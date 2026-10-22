@@ -39,9 +39,10 @@ export async function registerShop(db: DB, auth: Auth, input: RegisterShopInput)
 
   const ctx = await auth.$context;
   const hash = await ctx.password.hash(input.password);
-  const user = await ctx.internalAdapter.createUser({ email, name: input.ownerName.trim() || email, emailVerified: true }, { method: "email-password" });
+  const user = await ctx.internalAdapter.createUser({ email, name: input.ownerName.trim() || email, emailVerified: false }, { method: "email-password" });
   if (!user) throw new Error("Better Auth did not create the user");
   await ctx.internalAdapter.linkAccount({ userId: user.id, providerId: "credential", accountId: user.id, password: hash });
+  await auth.api.sendVerificationEmail({ body: { email, callbackURL: "/admin" } });
 
   try {
     const [shop] = await db

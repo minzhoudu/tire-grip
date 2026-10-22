@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/db";
@@ -29,9 +28,19 @@ export async function registerShopAction(raw: SignupRequestInput): Promise<Regis
     return { ok: false, errors: { [field]: REASON_MESSAGES[result.reason] } };
   }
 
-  // Sign the new owner in right away (nextCookies() plugin sets the session cookie here).
-  await auth.api.signInEmail({ body: { email: parsed.data.email, password: parsed.data.password }, headers: await headers() });
-  redirect("/admin");
+  // Can't sign in yet — email isn't verified. Send them to a "check your inbox" screen instead.
+  redirect(`/registracija/potvrda?email=${encodeURIComponent(parsed.data.email)}`);
+}
+
+export async function resendVerificationAction(raw: { email: string }): Promise<{ ok: boolean }> {
+  const input = z.object({ email: z.email() }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  try {
+    await getAuth().api.sendVerificationEmail({ body: { email: input.data.email, callbackURL: "/admin" } });
+  } catch {
+    // Unknown email, already verified, etc. — don't leak which, same response either way.
+  }
+  return { ok: true };
 }
 
 const slugInput = z.object({ slug: signupRequestSchema.shape.slug });

@@ -7,11 +7,11 @@ import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Prijava · Moj Vulkanizer", robots: { index: false } };
 
-type Props = { searchParams: Promise<{ next?: string }> };
+type Props = { searchParams: Promise<{ next?: string; reset?: string }> };
 
 export default async function LoginPage({ searchParams }: Props) {
   await connection();
-  const { next } = await searchParams;
+  const { next, reset } = await searchParams;
   const target = safeNextPath(next);
   if (await getSessionUser()) redirect(target);
 
@@ -26,6 +26,9 @@ export default async function LoginPage({ searchParams }: Props) {
           <p className="text-sm text-slate-600">Panel za vulkanizere</p>
         </div>
       </div>
+      {reset === "1" && (
+        <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Lozinka je promenjena. Prijavite se novom lozinkom.</p>
+      )}
       <LoginForm next={target} />
     </main>
   );
