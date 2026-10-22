@@ -17,6 +17,17 @@ export function dayChipLabel(date: string, today: string): string {
   return `${SHORT[isoWeekday(date) - 1]} ${dayMonth(date)}`;
 }
 
+/** Day column header in the multi-day schedule: "Danas" / "Sutra" / "sub", over "24.10." */
+export function dayColumnLabel(date: string, today: string): { label: string; sublabel: string } {
+  const offset = diffDays(today, date);
+  return { label: offset === 0 ? "Danas" : offset === 1 ? "Sutra" : SHORT[isoWeekday(date) - 1]!, sublabel: dayMonth(date) };
+}
+
+/** "22.10.–24.10." */
+export function dayRangeLabel(from: string, to: string): string {
+  return `${dayMonth(from)}–${dayMonth(to)}`;
+}
+
 /** Long form for messages: "petak 9.10." */
 export function dayLongLabel(date: string): string {
   return `${LONG[isoWeekday(date) - 1]} ${dayMonth(date)}`;
