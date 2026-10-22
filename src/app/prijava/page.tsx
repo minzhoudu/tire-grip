@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { AuthShell } from "@/components/auth-shell";
 import { safeNextPath } from "@/lib/safe-next";
-import { defaultLoginTarget } from "@/server/origin";
+import { defaultLoginTarget, toRootUrl } from "@/server/origin";
 import { getSessionUser } from "@/server/session";
 import { LoginForm } from "./login-form";
 
@@ -17,20 +19,22 @@ export default async function LoginPage({ searchParams }: Props) {
   if (await getSessionUser()) redirect(target);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-10">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="grid size-12 place-items-center rounded-2xl bg-navy-900 text-2xl" aria-hidden>
-          🛞
-        </div>
-        <div>
-          <h1 className="font-mono text-2xl font-bold">Prijava</h1>
-          <p className="text-sm text-slate-600">Panel za vulkanizere</p>
-        </div>
-      </div>
+    <AuthShell
+      title="Prijava"
+      subtitle="Panel za vulkanizere"
+      footer={
+        <>
+          Nemate nalog?{" "}
+          <Link href={await toRootUrl("/registracija")} className="font-semibold text-navy-700 underline">
+            Registrujte radnju
+          </Link>
+        </>
+      }
+    >
       {reset === "1" && (
         <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Lozinka je promenjena. Prijavite se novom lozinkom.</p>
       )}
       <LoginForm next={target} />
-    </main>
+    </AuthShell>
   );
 }

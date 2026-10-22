@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
+import { AuthShell } from "@/components/auth-shell";
 import { ResendVerification } from "./resend-verification";
 
 export const metadata: Metadata = { title: "Potvrdite email | Moj Vulkanizer", robots: { index: false } };
@@ -9,18 +10,17 @@ export default async function SignupConfirmationPage({ searchParams }: { searchP
   const { email } = await searchParams;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-10 text-center">
-      <div className="mb-6 flex flex-col items-center gap-3">
-        <div className="grid size-14 place-items-center rounded-2xl bg-navy-900 text-3xl" aria-hidden>
+    <AuthShell title="Proverite email" subtitle="Još jedan korak do naloga">
+      <div className="rounded-2xl border-2 border-navy-900 bg-white p-5 text-center">
+        <p className="text-4xl" aria-hidden>
           📬
-        </div>
-        <h1 className="font-mono text-2xl font-bold">Proverite email</h1>
+        </p>
+        <p className="mt-3 text-sm text-slate-600">
+          Poslali smo link za potvrdu naloga{email ? <> na <span className="font-semibold text-slate-900">{email}</span></> : ""}. Kliknite na
+          link da biste mogli da se prijavite.
+        </p>
+        {email && <ResendVerification email={email} />}
       </div>
-      <p className="text-sm text-slate-600">
-        Poslali smo link za potvrdu naloga{email ? <> na <span className="font-semibold text-slate-900">{email}</span></> : ""}. Kliknite na link da
-        biste mogli da se prijavite.
-      </p>
-      {email && <ResendVerification email={email} />}
-    </main>
+    </AuthShell>
   );
 }

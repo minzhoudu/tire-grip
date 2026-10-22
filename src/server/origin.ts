@@ -37,7 +37,7 @@ export async function platformUrl(): Promise<string> {
 }
 
 /** Absolute link to `path` on the bare root domain — unchanged (relative) if we're already there. */
-async function toRootUrl(path: string): Promise<string> {
+export async function toRootUrl(path: string): Promise<string> {
   const host = (await headers()).get("host");
   if (!subdomainOf(host)) return path;
   const root = await currentRootHost();
