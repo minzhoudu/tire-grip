@@ -14,22 +14,50 @@ import { Toggle } from "@/components/ui/toggle";
 import type { VehicleTypeWithUsage } from "@/server/settings";
 import { input, primaryButton, resultBanner, secondaryButton } from "./ui";
 
+/** Labels match the 3 defaults every existing shop already has, so editing one of those shows it as a preset. */
+const PRESETS = [
+  { label: "Putničko", icon: "🚗" },
+  { label: "SUV / džip", icon: "🚙" },
+  { label: "Kombi", icon: "🚐" },
+  { label: "Pikap", icon: "🛻" },
+  { label: "Kamion", icon: "🚚" },
+  { label: "Motor", icon: "🏍️" },
+  { label: "Skuter", icon: "🛵" },
+  { label: "Traktor", icon: "🚜" },
+];
+const ICONS = [...PRESETS.map((p) => p.icon), "🚌", "🏎️"];
+const OTHER = "__other__";
+
 interface FormState {
-  label: string;
+  choice: string;
+  customLabel: string;
   icon: string;
+  customIcon: boolean;
 }
 
-function emptyForm(): FormState {
-  return { label: "", icon: "" };
+function presetFor(label: string) {
+  return PRESETS.find((p) => p.label === label);
+}
+
+function emptyForm(takenLabels: string[]): FormState {
+  const first = PRESETS.find((p) => !takenLabels.includes(p.label));
+  return first
+    ? { choice: first.label, customLabel: "", icon: first.icon, customIcon: false }
+    : { choice: OTHER, customLabel: "", icon: "", customIcon: false };
 }
 
 function formFromVehicleType(vt: VehicleTypeWithUsage): FormState {
-  return { label: vt.label, icon: vt.icon ?? "" };
+  const icon = vt.icon ?? "";
+  const customIcon = icon !== "" && !ICONS.includes(icon);
+  return presetFor(vt.label)
+    ? { choice: vt.label, customLabel: "", icon, customIcon }
+    : { choice: OTHER, customLabel: vt.label, icon, customIcon };
 }
 
 function VehicleTypeForm({
   slug,
   initial,
+  takenLabels,
   onSaved,
   onCancel,
   submitLabel,
@@ -37,20 +65,30 @@ function VehicleTypeForm({
 }: {
   slug: string;
   initial: FormState;
+  /** Presets the shop already has, hidden from the list (except the one being edited). */
+  takenLabels: string[];
   onSaved: () => void;
   onCancel?: () => void;
   submitLabel: string;
-  submit: (slug: string, form: FormState) => Promise<{ ok: true } | { ok: false; error: string }>;
+  submit: (slug: string, values: { label: string; icon: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const presets = PRESETS.filter((p) => p.label === initial.choice || !takenLabels.includes(p.label));
+
+  function choose(choice: string) {
+    const preset = presetFor(choice);
+    // A preset brings its own icon; switching to "Drugo" keeps whatever was picked.
+    setForm((f) => (preset ? { ...f, choice, icon: preset.icon, customIcon: false } : { ...f, choice }));
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const label = form.choice === OTHER ? form.customLabel : form.choice;
     startTransition(async () => {
-      const r = await submit(slug, form);
+      const r = await submit(slug, { label, icon: form.icon });
       if (!r.ok) {
         setError(r.error);
         return;
@@ -61,15 +99,75 @@ function VehicleTypeForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-2xl bg-slate-50 p-4">
-      <div className="grid grid-cols-[1fr_4.5rem] gap-3">
+      <label className="block">
+        <span className="text-sm font-semibold text-slate-700">Vrsta vozila</span>
+        <select className={`${input} mt-1.5`} value={form.choice} onChange={(e) => choose(e.target.value)}>
+          {presets.map((p) => (
+            <option key={p.label} value={p.label}>
+              {p.icon} {p.label}
+            </option>
+          ))}
+          <option value={OTHER}>Drugo (upišite naziv)</option>
+        </select>
+      </label>
+
+      {form.choice === OTHER && (
         <label className="block">
           <span className="text-sm font-semibold text-slate-700">Naziv</span>
-          <input className={`${input} mt-1.5`} value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
+          <input
+            className={`${input} mt-1.5`}
+            placeholder="npr. Autobus"
+            autoFocus
+            value={form.customLabel}
+            onChange={(e) => setForm((f) => ({ ...f, customLabel: e.target.value }))}
+          />
         </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-slate-700">Ikonica</span>
-          <input className={`${input} mt-1.5 text-center`} maxLength={8} value={form.icon} onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))} />
-        </label>
+      )}
+
+      <div>
+        <span className="text-sm font-semibold text-slate-700">Ikonica</span>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {ICONS.map((icon) => {
+            const selected = !form.customIcon && form.icon === icon;
+            return (
+              <button
+                key={icon}
+                type="button"
+                aria-label={`Ikonica ${icon}`}
+                aria-pressed={selected}
+                onClick={() => setForm((f) => ({ ...f, icon, customIcon: false }))}
+                className={`grid size-11 place-items-center rounded-xl border-2 text-xl ${
+                  selected ? "border-navy-900 bg-accent-500" : "border-slate-200 bg-white"
+                }`}
+              >
+                {icon}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            aria-pressed={form.customIcon}
+            onClick={() => setForm((f) => ({ ...f, icon: f.customIcon ? f.icon : "", customIcon: true }))}
+            className={`h-11 rounded-xl border-2 px-3 text-sm font-semibold ${
+              form.customIcon ? "border-navy-900 bg-accent-500 text-navy-950" : "border-slate-200 bg-white text-slate-700"
+            }`}
+          >
+            Svoja
+          </button>
+        </div>
+        {form.customIcon && (
+          <div className="mt-2 w-24">
+            <input
+              className={`${input} text-center text-xl`}
+              maxLength={8}
+              placeholder="🚘"
+              aria-label="Svoja ikonica"
+              autoFocus
+              value={form.icon}
+              onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
+            />
+          </div>
+        )}
       </div>
 
       {error && resultBanner(false, error)}
@@ -93,6 +191,7 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const takenLabels = vehicleTypes.map((vt) => vt.label);
 
   return (
     <div className="flex flex-col gap-3">
@@ -103,6 +202,7 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
               <VehicleTypeForm
                 slug={slug}
                 initial={formFromVehicleType(vt)}
+                takenLabels={takenLabels}
                 submitLabel="Sačuvaj izmene"
                 onCancel={() => setEditingId(null)}
                 onSaved={() => {
@@ -110,9 +210,7 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
                   toast("Sačuvano.");
                   router.refresh();
                 }}
-                submit={(slug, form) =>
-                  updateVehicleTypeAction({ slug, vehicleTypeId: vt.id, label: form.label, icon: form.icon })
-                }
+                submit={(slug, values) => updateVehicleTypeAction({ slug, vehicleTypeId: vt.id, ...values })}
               />
             </li>
           ) : (
@@ -186,7 +284,8 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
       {adding ? (
         <VehicleTypeForm
           slug={slug}
-          initial={emptyForm()}
+          initial={emptyForm(takenLabels)}
+          takenLabels={takenLabels}
           submitLabel="Dodaj vrstu vozila"
           onCancel={() => setAdding(false)}
           onSaved={() => {
@@ -194,7 +293,7 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
             toast("Dodato.");
             router.refresh();
           }}
-          submit={(slug, form) => createVehicleTypeAction({ slug, label: form.label, icon: form.icon })}
+          submit={(slug, values) => createVehicleTypeAction({ slug, ...values })}
         />
       ) : (
         <button type="button" onClick={() => setAdding(true)} className={primaryButton}>

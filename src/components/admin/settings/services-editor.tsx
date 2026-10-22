@@ -81,6 +81,10 @@ function buildPrices(form: FormState) {
     }));
 }
 
+function Note({ children }: { children: React.ReactNode }) {
+  return <span className="mt-1 block text-xs text-slate-500">{children}</span>;
+}
+
 function ServiceForm({
   slug,
   initial,
@@ -119,16 +123,31 @@ function ServiceForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-2xl bg-slate-50 p-4">
-      <div className="grid grid-cols-[1fr_4.5rem] gap-3">
-        <label className="block">
-          <span className="text-sm font-semibold text-slate-700">Naziv</span>
-          <input className={`${input} mt-1.5`} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-slate-700">Ikonica</span>
-          <input className={`${input} mt-1.5 text-center`} maxLength={8} value={form.icon} onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))} />
-        </label>
-      </div>
+      <label className="block">
+        <span className="text-sm font-semibold text-slate-700">Naziv</span>
+        <input
+          className={`${input} mt-1.5`}
+          placeholder="npr. Zamena guma"
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+        />
+        <Note>Ovako kupci vide uslugu u chatu, cenovniku i WhatsApp porukama.</Note>
+      </label>
+      <label className="block">
+        <span className="text-sm font-semibold text-slate-700">Ikonica (opciono)</span>
+        <div className="mt-1.5 flex items-center gap-3">
+          <div className="w-20 shrink-0">
+            <input
+              className={`${input} text-center text-xl`}
+              maxLength={8}
+              placeholder="🔄"
+              value={form.icon}
+              onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
+            />
+          </div>
+          <span className="text-xs text-slate-500">Emoji koji se prikazuje pored naziva u chatu. Može i bez nje.</span>
+        </div>
+      </label>
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Vrsta</span>
         <select className={`${input} mt-1.5`} value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as ServiceKind }))}>
@@ -138,24 +157,43 @@ function ServiceForm({
             </option>
           ))}
         </select>
+        <Note>
+          Služi za razvrstavanje usluga. Kod „Zamena guma (sezonska)“ kupac može da se prijavi za podsetnik pred sledeću sezonu, pa ga
+          kasnije možete obavestiti iz Podsetnika.
+        </Note>
       </label>
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Opis (opciono)</span>
-        <input className={`${input} mt-1.5`} maxLength={300} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+        <input
+          className={`${input} mt-1.5`}
+          maxLength={300}
+          placeholder="npr. Sa balansiranjem 4 gume"
+          value={form.description}
+          onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+        />
+        <Note>Kratko objašnjenje koje kupac vidi u chatu kad izabere ovu uslugu.</Note>
       </label>
       <label className="block">
-        <span className="text-sm font-semibold text-slate-700">Trajanje (min, podrazumevano)</span>
+        <span className="text-sm font-semibold text-slate-700">Trajanje (u minutima)</span>
         <input type="number" min={5} max={480} className={`${input} mt-1.5`} value={form.durationMin} onChange={(e) => setForm((f) => ({ ...f, durationMin: e.target.value }))} />
+        <Note>
+          Koliko vam traje ova usluga. Toliko dugo je boks zauzet, pa od ovoga zavisi koje slobodne termine kupci vide. Za pojedine vrste
+          vozila može se upisati drugačije trajanje ispod.
+        </Note>
       </label>
       <ToggleRow
         title="Kupci mogu da zakažu ovu uslugu"
-        description="Isključite za npr. stavku u cenovniku koja se ne zakazuje"
+        description="Kad je isključeno, usluga se vidi samo u cenovniku i ne može da se zakaže."
         checked={form.bookable}
         onChange={(v) => setForm((f) => ({ ...f, bookable: v }))}
       />
 
       <div>
-        <p className="mb-1.5 text-sm font-semibold text-slate-700">Cena po tipu vozila</p>
+        <p className="text-sm font-semibold text-slate-700">Cena po tipu vozila</p>
+        <p className="mb-1.5 text-xs text-slate-500">
+          Označite vozila za koja radite ovu uslugu i upišite cenu u dinarima. Kupac sa neoznačenim vozilom ne može da zakaže ovu uslugu.
+          Trajanje upišite samo ako se razlikuje od gornjeg (npr. SUV traje duže).
+        </p>
         {pickable.length === 0 ? (
           <p className="rounded-xl bg-white px-3 py-2.5 text-sm text-slate-500">Radnja nema definisane vrste vozila. Dodajte ih u „Vrste vozila".</p>
         ) : (
@@ -189,7 +227,7 @@ function ServiceForm({
                         type="number"
                         min={5}
                         max={480}
-                        placeholder="Trajanje"
+                        placeholder="Trajanje (min)"
                         className={`${input} py-1.5`}
                         value={f.durationMin}
                         onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), durationMin: e.target.value } } }))}
