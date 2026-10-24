@@ -3,7 +3,7 @@
  * booking rules, weekly hours, date exceptions and services/prices.
  * Every function takes the shopId explicitly and scopes every query by it.
  */
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { cache } from "react";
 import type { DB } from "../db/index.ts";
 import {
@@ -20,7 +20,7 @@ import {
 } from "../db/schema.ts";
 import { hoursForDate, type DateException, type WeeklyHours } from "../lib/availability/index.ts";
 import type { VehicleType } from "../lib/availability/pricing.ts";
-import { formatMinutes, utcToZoned } from "../lib/availability/zoned.ts";
+import { addDays, formatMinutes, utcToZoned, zonedToUtc } from "../lib/availability/zoned.ts";
 
 export type ServiceKind = (typeof services.$inferInsert)["kind"];
 
@@ -193,6 +193,47 @@ export async function upsertException(db: DB, shopId: string, input: ExceptionIn
       note: input.note,
     });
   });
+}
+
+export interface AddClosedDaysResult {
+  added: number;
+  /** Newly closed dates that already have pending/confirmed bookings — the shop has to tell those customers. */
+  datesWithBookings: string[];
+}
+
+/** Marks the dates closed, skipping any that already have an exception (custom hours the shop set stay as they are). */
+export async function addClosedDays(
+  db: DB,
+  shop: { id: string; timezone: string },
+  days: { date: string; note: string }[],
+): Promise<AddClosedDaysResult> {
+  if (days.length === 0) return { added: 0, datesWithBookings: [] };
+  const existing = await db
+    .select({ date: scheduleExceptions.date })
+    .from(scheduleExceptions)
+    .where(and(eq(scheduleExceptions.shopId, shop.id), inArray(scheduleExceptions.date, days.map((d) => d.date))));
+  const skip = new Set(existing.map((e) => e.date));
+  const toAdd = days.filter((d) => !skip.has(d.date));
+  if (toAdd.length === 0) return { added: 0, datesWithBookings: [] };
+
+  await db.insert(scheduleExceptions).values(toAdd.map((d) => ({ shopId: shop.id, date: d.date, closed: true, note: d.note })));
+
+  const datesWithBookings: string[] = [];
+  for (const d of toAdd) {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.shopId, shop.id),
+          inArray(bookings.status, ["pending", "confirmed"]),
+          gte(bookings.startsAt, zonedToUtc(d.date, 0, shop.timezone)),
+          lt(bookings.startsAt, zonedToUtc(addDays(d.date, 1), 0, shop.timezone)),
+        ),
+      );
+    if ((row?.n ?? 0) > 0) datesWithBookings.push(d.date);
+  }
+  return { added: toAdd.length, datesWithBookings };
 }
 
 export async function deleteException(db: DB, shopId: string, id: string): Promise<boolean> {

@@ -77,6 +77,9 @@ export default async function SchedulePage({ params, searchParams }: Props) {
     const day = perDay[0]!;
     columns = Array.from({ length: bayCount }, (_, i) => i + 1).map((bay) => ({
       key: `bay-${bay}`,
+      date: day.date,
+      bay,
+      past: day.date < today,
       label: `Boks ${bay}`,
       lanes: 1,
       open: day.open,
@@ -89,6 +92,8 @@ export default async function SchedulePage({ params, searchParams }: Props) {
   } else {
     columns = perDay.map((day) => ({
       key: day.date,
+      date: day.date,
+      past: day.date < today,
       ...dayColumnLabel(day.date, today),
       href: href(day.date, "day"),
       highlight: day.date === today,
@@ -127,7 +132,7 @@ export default async function SchedulePage({ params, searchParams }: Props) {
         <h1 className="font-mono text-xl font-bold">Raspored</h1>
         <p className="text-sm text-slate-600">
           {view === "day"
-            ? "Ko je kada u kom boksu. Dodirnite termin za detalje i akcije."
+            ? "Ko je kada u kom boksu. Dodirnite termin za detalje, ili prazno mesto za novi termin."
             : bayCount > 1
               ? "Tri dana, svaki boks je jedna traka u danu. Dodirnite dan za detalje."
               : "Tri dana odjednom. Dodirnite dan za detalje ili termin za akcije."}
@@ -153,7 +158,14 @@ export default async function SchedulePage({ params, searchParams }: Props) {
             <p className="mt-2 font-semibold">{view === "day" ? "Zatvoreno, nema termina." : "Zatvoreno sva tri dana, nema termina."}</p>
           </div>
         ) : (
-          <ScheduleGrid slug={slug} startMin={startMin} endMin={endMin} columns={columns} />
+          <ScheduleGrid
+            slug={slug}
+            startMin={startMin}
+            endMin={endMin}
+            columns={columns}
+            stepMin={shop.slotStepMin}
+            newBookingHref={`${base}/novi`}
+          />
         )}
       </ScheduleNav>
     </div>

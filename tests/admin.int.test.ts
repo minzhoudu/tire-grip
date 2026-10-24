@@ -229,6 +229,36 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
     expect(row!.source).toBe("admin");
   });
 
+  it("uses the bay tapped in the schedule when it's free, otherwise another one", async () => {
+    const db = getDb();
+    const req = (phone: string) => request({ phone, startsAt: at(farDate, 13) });
+    const a = await createBookingRequest(db, req("064 700 0013"), { source: "admin", preferredBay: 2 });
+    expect(a.ok && a.booking.bay).toBe(2);
+    const b = await createBookingRequest(db, req("064 700 0014"), { source: "admin", preferredBay: 2 });
+    expect(b.ok && b.booking.bay).toBe(1);
+    expect(await createBookingRequest(db, req("064 700 0015"), { source: "admin", preferredBay: 2 })).toEqual({ ok: false, reason: "slot_unavailable" });
+  });
+
+  it("counts the customer's earlier no-shows on their upcoming bookings", async () => {
+    const db = getDb();
+    const shop = { id: shopId, timezone: TZ };
+    const phone = "064 700 0011";
+    const first = await createBookingRequest(db, request({ phone, startsAt: at(farDate, 15) }), { source: "admin" });
+    const next = await createBookingRequest(db, request({ phone, startsAt: at(farDate, 16) }), { source: "admin" });
+    const stranger = await createBookingRequest(db, request({ phone: "064 700 0012", startsAt: at(farDate, 16) }), { source: "admin" });
+    expect(first.ok && next.ok && stranger.ok).toBe(true);
+    if (!first.ok || !next.ok || !stranger.ok) return;
+
+    const before = await listBookings(db, shop, "upcoming");
+    expect(before.find((b) => b.id === next.booking.id)?.customerNoShows).toBe(0);
+
+    // no-show is only allowed after the start time, so set it directly
+    await db.update(bookings).set({ status: "no_show" }).where(eq(bookings.id, first.booking.id));
+    const after = await listBookings(db, shop, "upcoming");
+    expect(after.find((b) => b.id === next.booking.id)?.customerNoShows).toBe(1);
+    expect(after.find((b) => b.id === stranger.booking.id)?.customerNoShows).toBe(0);
+  });
+
   it("blocked time hides slots, warns about existing bookings, and is scoped to the shop", async () => {
     const db = getDb();
     await createBookingRequest(db, request({ phone: "064 700 0006", startsAt: at(date, 12) }));

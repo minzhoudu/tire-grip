@@ -39,6 +39,8 @@ export interface AdminBooking {
   cancelReason: string | null;
   notifiedAt: Date | null;
   reminderSentAt: Date | null;
+  /** How many of this customer's bookings at this shop ended as "nije došao" */
+  customerNoShows: number;
 }
 
 const bookingColumns = {
@@ -62,6 +64,7 @@ const bookingColumns = {
   cancelReason: bookings.cancelReason,
   notifiedAt: bookings.notifiedAt,
   reminderSentAt: bookings.reminderSentAt,
+  customerNoShows: sql<number>`(select count(*)::int from bookings ns where ns.shop_id = ${bookings.shopId} and ns.customer_id = ${bookings.customerId} and ns.status = 'no_show')`,
 };
 
 function bookingQuery(db: DB) {
@@ -250,6 +253,7 @@ export function toBookingCardData(
     byPhone: b.source === "admin",
     cancelReason: b.cancelReason,
     notifyUrl: notifyKind ? customerMessageUrl(b, shop, notifyKind, origin) : null,
+    customerNoShows: Number(b.customerNoShows),
   };
 }
 

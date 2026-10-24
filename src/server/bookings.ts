@@ -68,6 +68,8 @@ export interface CreateBookingOptions {
    * "reminder" = followed a seasonal reminder link — same rules as "web", just tagged for attribution.
    */
   source?: "web" | "admin" | "reminder";
+  /** Try this bay first (tapped in the schedule); another free bay is used if it's taken. */
+  preferredBay?: number;
 }
 
 /** How far ahead the shop itself can enter bookings. */
@@ -76,7 +78,7 @@ export const ADMIN_HORIZON_DAYS = 120;
 export async function createBookingRequest(
   db: DB,
   req: BookingRequest,
-  { now = new Date(), source = "web" }: CreateBookingOptions = {},
+  { now = new Date(), source = "web", preferredBay }: CreateBookingOptions = {},
 ): Promise<CreateBookingResult> {
   const ctx = await loadShopContext(db, req.slug);
   if (!ctx) return { ok: false, reason: "shop_not_found" };
@@ -152,9 +154,10 @@ export async function createBookingRequest(
         }
       }
 
+      const bays = preferredBay && slot.freeBays.includes(preferredBay) ? [preferredBay, ...slot.freeBays.filter((b) => b !== preferredBay)] : slot.freeBays;
       let deadlocks = 0;
-      for (let i = 0; i < slot.freeBays.length; i++) {
-        const bay = slot.freeBays[i]!;
+      for (let i = 0; i < bays.length; i++) {
+        const bay = bays[i]!;
         try {
           const [row] = await tx.transaction((sp) =>
             sp

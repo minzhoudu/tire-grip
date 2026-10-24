@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { adminSlotsAction, createManualBookingAction } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
@@ -22,18 +22,25 @@ export function ManualBookingForm({
   services,
   vehicleTypes,
   today,
+  initial,
 }: {
   slug: string;
   base: string;
   services: PublicService[];
   vehicleTypes: PublicVehicleType[];
   today: string;
+  /** Prefill from a tap in Raspored; time and bay are null when opened from the menu. */
+  initial: { date: string; time: string | null; bay: number | null };
 }) {
   const toast = useToast();
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const service = services.find((s) => s.id === serviceId);
   const [vehicleTypeId, setVehicleTypeId] = useState(service?.prices[0]?.vehicleTypeId ?? "");
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(initial.date);
+  // The tapped time is picked as soon as the slots load (and again after a service change), until a time is chosen by hand.
+  const wantedTime = useRef(initial.time);
+  const [wantedMissing, setWantedMissing] = useState<string | null>(null);
+  const [bay, setBay] = useState(initial.bay);
   const [slots, setSlots] = useState<Slots>({ state: "idle" });
   const [startsAt, setStartsAt] = useState<string | null>(null);
   const [fields, setFields] = useState({ name: "", phone: "", vehicleLabel: "", note: "" });
@@ -58,7 +65,15 @@ export function ManualBookingForm({
     setSlots({ state: "loading" });
     setStartsAt(null);
     adminSlotsAction({ slug, serviceId, vehicleTypeId, date })
-      .then((r) => !cancelled && setSlots(r.ok ? { state: "ready", status: r.status, slots: r.slots } : { state: "error" }))
+      .then((r) => {
+        if (cancelled) return;
+        setSlots(r.ok ? { state: "ready", status: r.status, slots: r.slots } : { state: "error" });
+        const want = wantedTime.current;
+        if (!r.ok || !want) return;
+        const hit = r.slots.find((s) => s.time === want && s.available);
+        setStartsAt(hit?.startsAt ?? null);
+        setWantedMissing(hit ? null : want);
+      })
       .catch(() => !cancelled && setSlots({ state: "error" }));
     return () => {
       cancelled = true;
@@ -88,6 +103,8 @@ export function ManualBookingForm({
             onClick={() => {
               setDone(null);
               setFields({ name: "", phone: "", vehicleLabel: "", note: "" });
+              wantedTime.current = null;
+              setWantedMissing(null);
               setReload((k) => k + 1);
             }}
             className="flex-1 rounded-xl bg-slate-200 px-4 py-3 font-semibold"
@@ -109,7 +126,7 @@ export function ManualBookingForm({
       return;
     }
     startTransition(async () => {
-      const r = await createManualBookingAction({ slug, serviceId, vehicleTypeId, startsAt, ...fields, reminderConsent: false });
+      const r = await createManualBookingAction({ slug, serviceId, vehicleTypeId, startsAt, ...fields, reminderConsent: false, bay: bay ?? undefined });
       if (r.ok) {
         setErrors({});
         setDone({ summary: r.summary, messageUrl: r.messageUrl });
@@ -158,13 +175,31 @@ export function ManualBookingForm({
 
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Datum</span>
-        <input type="date" className={`${input} mt-1.5`} min={today} value={date} onChange={(e) => setDate(e.target.value)} />
+        <input type="date" className={`${input} mt-1.5`} min={today} value={date} onChange={(e) => {
+            wantedTime.current = null;
+            setWantedMissing(null);
+            setDate(e.target.value);
+          }} />
       </label>
 
       <div>
         <p className="text-sm font-semibold text-slate-700">
           Termin{price && <span className="font-normal text-slate-500"> · traje oko {price.durationMin ?? service?.durationMin} min</span>}
         </p>
+        {bay !== null && (
+          <p className="mt-1.5 flex items-center gap-2 text-sm text-slate-600">
+            <span className="rounded-full bg-navy-900 px-2.5 py-0.5 text-xs font-bold text-white">Boks {bay}</span>
+            <span>ako je slobodan, inače drugi</span>
+            <button type="button" onClick={() => setBay(null)} className="ml-auto text-xs font-semibold text-slate-500 underline">
+              bilo koji boks
+            </button>
+          </p>
+        )}
+        {wantedMissing && slots.state === "ready" && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            U {wantedMissing}h nema mesta za ovu uslugu. Izaberite drugo vreme.
+          </p>
+        )}
         {slots.state === "loading" || slots.state === "idle" ? (
           <p className="mt-2 text-sm text-slate-500">Učitavam termine…</p>
         ) : slots.state === "error" ? (
@@ -181,6 +216,8 @@ export function ManualBookingForm({
                 type="button"
                 disabled={!s.available}
                 onClick={() => {
+                  wantedTime.current = null;
+                  setWantedMissing(null);
                   setStartsAt(s.startsAt);
                   setErrors((e) => ({ ...e, startsAt: "" }));
                 }}

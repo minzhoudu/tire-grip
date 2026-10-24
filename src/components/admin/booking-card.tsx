@@ -28,6 +28,8 @@ export interface BookingCardData {
   cancelReason: string | null;
   /** Set (and the "message not sent" banner shown) whenever the customer hasn't been told about the booking's current status yet — persists across visits, not just right after the action. */
   notifyUrl: string | null;
+  /** Earlier "nije došao" bookings by this customer at this shop */
+  customerNoShows: number;
 }
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -133,6 +135,12 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
         </div>
         {cancelledByCustomer && (
           <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-800">❌ Kupac je otkazao ovaj termin.</p>
+        )}
+        {b.customerNoShows > 0 && (status === "pending" || status === "confirmed") && (
+          <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+            ⚠️ Ovaj kupac {b.customerNoShows === 1 ? "jednom nije došao" : `${b.customerNoShows} puta nije došao`} na zakazan termin. Možda ga
+            pozovite da potvrdi.
+          </p>
         )}
         {b.customerNote && <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">📝 {b.customerNote}</p>}
       </div>

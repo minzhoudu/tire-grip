@@ -110,13 +110,14 @@ export type ManualBookingResult =
   | { ok: false; reason: "invalid"; errors: Record<string, string> }
   | { ok: false; reason: "slot_unavailable" | "service_unavailable" | "shop_not_found" };
 
-export async function createManualBookingAction(raw: BookingRequestInput): Promise<ManualBookingResult> {
+export async function createManualBookingAction(raw: BookingRequestInput & { bay?: number }): Promise<ManualBookingResult> {
   const parsed = bookingRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
   const { shop } = await requireShopAccess(parsed.data.slug);
+  const preferredBay = Number.isInteger(raw.bay) && raw.bay! >= 1 && raw.bay! <= shop.bays ? raw.bay : undefined;
 
   const db = getDb();
-  const result = await createBookingRequest(db, parsed.data, { source: "admin" });
+  const result = await createBookingRequest(db, parsed.data, { source: "admin", preferredBay });
   if (!result.ok) return { ok: false, reason: result.reason };
 
   const booking = await getBooking(db, shop.id, result.booking.id);
@@ -124,7 +125,7 @@ export async function createManualBookingAction(raw: BookingRequestInput): Promi
   return {
     ok: true,
     messageUrl: customerMessageUrl(booking, shop, "confirm", await getOrigin()),
-    summary: `${booking.customerName} · ${dayLongLabel(result.booking.date)} u ${result.booking.time}h`,
+    summary: `${booking.customerName} · ${dayLongLabel(result.booking.date)} u ${result.booking.time}h${shop.bays > 1 ? ` · boks ${result.booking.bay}` : ""}`,
   };
 }
 

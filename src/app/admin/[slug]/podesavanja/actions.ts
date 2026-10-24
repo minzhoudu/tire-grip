@@ -8,9 +8,12 @@
 import { z } from "zod";
 import { getDb } from "@/db";
 import { serviceKind } from "@/db/schema";
+import { shopToday } from "@/lib/availability";
+import { upcomingSerbianHolidays } from "@/lib/availability/holidays";
 import { normalizePhone } from "@/lib/phone";
 import { requireOwnerAccess } from "@/server/session";
 import {
+  addClosedDays,
   createService,
   createVehicleType,
   deleteException,
@@ -155,6 +158,21 @@ export async function upsertExceptionAction(raw: z.input<typeof exceptionInput>)
     note: input.data.note || null,
   });
   return { ok: true };
+}
+
+export type AddHolidaysResult = { ok: true; added: number; datesWithBookings: string[] } | { ok: false };
+
+/** Closes the shop on the chosen upcoming public holidays. Names come from our own list, not the client. */
+export async function addHolidaysAction(raw: { slug: string; dates: string[] }): Promise<AddHolidaysResult> {
+  const input = z.object({ slug: slugSchema, dates: z.array(z.iso.date()).max(40) }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  const wanted = new Set(input.data.dates);
+  const days = upcomingSerbianHolidays(shopToday(shop, new Date()))
+    .filter((h) => wanted.has(h.date))
+    .map((h) => ({ date: h.date, note: h.name }));
+  const r = await addClosedDays(getDb(), shop, days);
+  return { ok: true, ...r };
 }
 
 export async function deleteExceptionAction(raw: { slug: string; id: string }): Promise<{ ok: boolean }> {

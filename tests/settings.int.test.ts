@@ -13,6 +13,7 @@ import { addDays, shopToday, utcToZoned, zonedToUtc } from "../src/lib/availabil
 import { bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { createBookingRequest } from "../src/server/bookings.ts";
 import {
+  addClosedDays,
   createService,
   createVehicleType,
   deleteException,
@@ -393,5 +394,21 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
       expect(await deleteVehicleType(db, otherShop.id, carTypeId)).toEqual({ ok: false, reason: "not_found" });
       await db.delete(shops).where(eq(shops.id, otherShop.id));
     });
+  });
+
+  it("closes on picked holidays, keeps a date's own custom hours, and reports days that already have bookings", async () => {
+    const db = getDb();
+    const [custom, plain, booked] = [addDays(date, 40), addDays(date, 41), addDays(date, 42)];
+    await upsertException(db, shopId, { date: custom, closed: false, opensAt: "09:00", closesAt: "13:00", note: "skraćeno" });
+    const r = await createBookingRequest(db, request({ startsAt: at(booked, 9), name: "Praznični Kupac", phone: "064 700 5001" }), { source: "admin" });
+    expect(r.ok).toBe(true);
+
+    const days = [custom, plain, booked].map((d) => ({ date: d, note: "Praznik" }));
+    expect(await addClosedDays(db, { id: shopId, timezone: TZ }, days)).toEqual({ added: 2, datesWithBookings: [booked] });
+    expect(await addClosedDays(db, { id: shopId, timezone: TZ }, days)).toEqual({ added: 0, datesWithBookings: [] }); // nothing new
+
+    const rows = await db.select().from(scheduleExceptions).where(eq(scheduleExceptions.shopId, shopId));
+    expect(rows.find((e) => e.date === custom)).toMatchObject({ closed: false, note: "skraćeno" });
+    expect(rows.find((e) => e.date === plain)).toMatchObject({ closed: true, note: "Praznik" });
   });
 });

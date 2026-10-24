@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { formatMinutes } from "@/lib/availability/zoned";
 import type { BookingStatus } from "@/lib/booking/status";
 import { BookingCard, type BookingCardData } from "./booking-card";
+import { InlineSpinner } from "@/components/ui/busy";
 import { usePendingNav } from "@/components/ui/pending-nav";
 
 export interface GridItem {
@@ -28,6 +29,11 @@ export interface GridBlock {
 
 export interface GridColumn {
   key: string;
+  date: string;
+  /** The bay of every lane (day view, one column per bay); omitted = the lane number is the bay. */
+  bay?: number;
+  /** A day before today: nothing can be booked. */
+  past: boolean;
   label: string;
   sublabel?: string;
   /** Tapping the header goes here (the 3-day view's day → that day's detailed view). */
@@ -72,10 +78,28 @@ function closedSpans(open: GridColumn["open"], start: number, end: number): { fr
   return spans.filter((s) => s.to > s.from);
 }
 
-export function ScheduleGrid({ slug, startMin, endMin, columns }: { slug: string; startMin: number; endMin: number; columns: GridColumn[] }) {
+export function ScheduleGrid({
+  slug,
+  startMin,
+  endMin,
+  columns,
+  stepMin,
+  newBookingHref,
+}: {
+  slug: string;
+  startMin: number;
+  endMin: number;
+  columns: GridColumn[];
+  /** The shop's slot grid; a tap on an empty spot snaps to it. */
+  stepMin: number;
+  /** "Novi termin" page; a tap on an empty spot offers it prefilled with day, time and bay. */
+  newBookingHref: string;
+}) {
   const router = useRouter();
-  const { go } = usePendingNav();
+  const { go, pending } = usePendingNav();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [ghost, setGhost] = useState<{ col: string; lane: number; min: number } | null>(null);
+  const [opening, setOpening] = useState(false);
   const selected = columns.flatMap((c) => c.items).find((i) => i.card.id === selectedId) ?? null;
 
   const height = (endMin - startMin) * PPM;
@@ -83,6 +107,36 @@ export function ScheduleGrid({ slug, startMin, endMin, columns }: { slug: string
   const span = (from: number, to: number) => Math.max((Math.min(to, endMin) - Math.max(from, startMin)) * PPM, 18);
   const gridLines: number[] = [];
   for (let m = startMin; m <= endMin; m += 30) gridLines.push(m);
+
+  /** Empty, open, not-past spot under the tap → a "+ 10:30" marker; tapping the marker opens Novi termin. */
+  function tapEmpty(e: React.MouseEvent<HTMLDivElement>, col: GridColumn) {
+    if ((e.target as HTMLElement).closest("button")) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const minute = startMin + (e.clientY - rect.top) / PPM;
+    const lane = Math.min(col.lanes, Math.max(1, Math.floor(((e.clientX - rect.left) / rect.width) * col.lanes) + 1));
+    const interval = col.open.find((o) => minute >= o.open && minute < o.close);
+    if (col.past || !interval) return setGhost(null);
+
+    const busy = [
+      ...col.items.filter((it) => it.lane === lane).map((it) => ({ from: it.fromMin, to: it.toMin })),
+      ...col.blocks.filter((b) => b.lane === null || b.lane === lane).map((b) => ({ from: b.fromMin, to: b.toMin })),
+    ];
+    let min = interval.open + Math.floor((minute - interval.open) / stepMin) * stepMin;
+    while (min < interval.close && (busy.some((b) => min < b.to && min + stepMin > b.from) || (col.nowMin !== null && min < col.nowMin))) {
+      min += stepMin;
+    }
+    // Only accept if the pushed-forward spot is still near the tap.
+    if (min >= interval.close || min - minute > stepMin * 2) return setGhost(null);
+    setGhost({ col: col.key, lane, min });
+  }
+
+  function openNew(col: GridColumn, lane: number, min: number) {
+    const qs = new URLSearchParams({ datum: col.date, vreme: formatMinutes(min) });
+    const bay = col.bay ?? lane;
+    if (col.bay !== undefined || col.lanes > 1) qs.set("boks", String(bay));
+    setOpening(true);
+    go(`${newBookingHref}?${qs}`);
+  }
 
   function close() {
     setSelectedId(null);
@@ -150,7 +204,7 @@ export function ScheduleGrid({ slug, startMin, endMin, columns }: { slug: string
                   <div className={headerClass}>{header}</div>
                 )}
 
-                <div className="relative" style={{ height }}>
+                <div className="relative" style={{ height }} onClick={(e) => tapEmpty(e, col)}>
                   {closedSpans(col.open, startMin, endMin).map((s) => (
                     <div key={s.from} className="absolute inset-x-0 bg-slate-100" style={{ top: top(s.from), height: (s.to - s.from) * PPM }} />
                   ))}
@@ -233,6 +287,23 @@ export function ScheduleGrid({ slug, startMin, endMin, columns }: { slug: string
                       </button>
                     );
                   })}
+
+                  {ghost?.col === col.key && (
+                    <button
+                      type="button"
+                      onClick={() => openNew(col, ghost.lane, ghost.min)}
+                      aria-label={`Novi termin u ${formatMinutes(ghost.min)}`}
+                      className="absolute z-10 flex items-center justify-center gap-1 overflow-hidden rounded-lg border-2 border-dashed border-navy-700 bg-navy-900/5 px-1 font-mono text-xs font-bold text-navy-900 active:scale-[0.98]"
+                      style={{
+                        top: top(ghost.min),
+                        height: Math.max(stepMin * PPM - 2, 28),
+                        left: `calc(${(ghost.lane - 1) * (100 / col.lanes)}% + 2px)`,
+                        width: `calc(${100 / col.lanes}% - 4px)`,
+                      }}
+                    >
+                      {opening && pending ? <InlineSpinner /> : "+"} {formatMinutes(ghost.min)}
+                    </button>
+                  )}
 
                   {col.nowMin !== null && col.nowMin >= startMin && col.nowMin <= endMin && (
                     <div className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-red-500" style={{ top: top(col.nowMin) }}>

@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { deleteExceptionAction, upsertExceptionAction } from "@/app/admin/[slug]/podesavanja/actions";
 import { BusyOverlay } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
+import { dayLongLabel } from "@/lib/availability/labels";
 import { ToggleRow } from "@/components/ui/toggle";
 import { input, primaryButton, secondaryButton } from "./ui";
 
@@ -80,7 +81,10 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
             <li key={ex.id} className="relative flex items-center gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
               {pending && removingId === ex.id && <BusyOverlay label="Uklanjam…" />}
               <div className="min-w-0 flex-1">
-                <p className="font-mono font-bold">{ex.date}</p>
+                <p className="font-mono font-bold">
+                  {dayLongLabel(ex.date)}
+                  {ex.date.slice(0, 4) !== today.slice(0, 4) && `${ex.date.slice(0, 4)}.`}
+                </p>
                 <p className="truncate text-sm text-slate-600">
                   {ex.closed ? "Zatvoreno" : `${ex.opensAt?.slice(0, 5)}–${ex.closesAt?.slice(0, 5)}`}
                   {ex.note ? ` · ${ex.note}` : ""}
