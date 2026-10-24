@@ -15,15 +15,17 @@ import { Toggle, ToggleRow } from "@/components/ui/toggle";
 import type { ServiceKind, ServiceWithPrices, VehicleTypeWithUsage } from "@/server/settings";
 import { input, primaryButton, resultBanner, secondaryButton } from "./ui";
 
-const KIND_LABELS: Record<ServiceKind, string> = {
-  seasonal_swap: "Zamena guma (sezonska)",
-  mount_balance: "Montaža + balansiranje",
-  new_tires: "Nove gume",
-  repair: "Popravka gume",
-  storage: "Čuvanje guma",
-  other: "Drugo",
+/** Picking a kind pre-fills the name and icon from here ("Drugo" leaves both to the owner). */
+const KIND_PRESETS: Record<ServiceKind, { label: string; name: string; icon: string }> = {
+  seasonal_swap: { label: "Zamena guma (sezonska)", name: "Zamena guma", icon: "🔄" },
+  mount_balance: { label: "Montaža + balansiranje", name: "Montaža + balansiranje", icon: "🛞" },
+  new_tires: { label: "Nove gume", name: "Nove gume", icon: "🆕" },
+  repair: { label: "Popravka gume", name: "Popravka gume", icon: "🔧" },
+  storage: { label: "Čuvanje guma", name: "Čuvanje guma", icon: "📦" },
+  other: { label: "Drugo", name: "", icon: "" },
 };
-const KINDS = Object.keys(KIND_LABELS) as ServiceKind[];
+const KINDS = Object.keys(KIND_PRESETS) as ServiceKind[];
+const ICONS = ["🔄", "🛞", "🔧", "📦", "🆕", "⚙️", "💧", "🧽", "✨"];
 
 interface PriceField {
   enabled: boolean;
@@ -35,17 +37,22 @@ interface FormState {
   kind: ServiceKind;
   name: string;
   icon: string;
+  /** "Svoja" is selected: the icon comes from the text field, not the chips */
+  customIcon: boolean;
   description: string;
   durationMin: string;
   bookable: boolean;
   prices: Record<string, PriceField>;
 }
 
-function emptyForm(): FormState {
+/** Starts on the first kind the shop doesn't offer yet, with its name and icon already filled in. */
+function emptyForm(takenKinds: string[]): FormState {
+  const kind = KINDS.find((k) => k !== "other" && !takenKinds.includes(k)) ?? "other";
   return {
-    kind: "other",
-    name: "",
-    icon: "",
+    kind,
+    name: KIND_PRESETS[kind].name,
+    icon: KIND_PRESETS[kind].icon,
+    customIcon: false,
     description: "",
     durationMin: "30",
     bookable: true,
@@ -54,16 +61,18 @@ function emptyForm(): FormState {
 }
 
 function formFromService(s: ServiceWithPrices): FormState {
-  const base = emptyForm();
-  for (const p of s.prices) base.prices[p.vehicleTypeId] = { enabled: true, priceRsd: String(p.priceRsd), durationMin: p.durationMin ? String(p.durationMin) : "" };
+  const prices: Record<string, PriceField> = {};
+  for (const p of s.prices) prices[p.vehicleTypeId] = { enabled: true, priceRsd: String(p.priceRsd), durationMin: p.durationMin ? String(p.durationMin) : "" };
+  const icon = s.icon ?? "";
   return {
     kind: s.kind as ServiceKind,
     name: s.name,
-    icon: s.icon ?? "",
+    icon,
+    customIcon: icon !== "" && !ICONS.includes(icon),
     description: s.description ?? "",
     durationMin: String(s.durationMin),
     bookable: s.bookable,
-    prices: base.prices,
+    prices,
   };
 }
 
@@ -108,6 +117,17 @@ function ServiceForm({
   const [pending, startTransition] = useTransition();
   const pickable = vehicleTypes.filter((vt) => vt.isActive || priceField(form, vt.id).enabled);
 
+  /** Swaps in the new kind's name/icon, unless the owner already typed their own (only the previous default gets replaced). */
+  function chooseKind(kind: ServiceKind) {
+    setForm((f) => {
+      const prev = KIND_PRESETS[f.kind];
+      const next = KIND_PRESETS[kind];
+      const name = f.name.trim() === "" || f.name === prev.name ? next.name : f.name;
+      const keepIcon = f.customIcon || (f.icon !== "" && f.icon !== prev.icon);
+      return { ...f, kind, name, icon: keepIcon ? f.icon : next.icon };
+    });
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -124,44 +144,75 @@ function ServiceForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-2xl bg-slate-50 p-4">
       <label className="block">
-        <span className="text-sm font-semibold text-slate-700">Naziv</span>
-        <input
-          className={`${input} mt-1.5`}
-          placeholder="npr. Zamena guma"
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        />
-        <Note>Ovako kupci vide uslugu u chatu, cenovniku i WhatsApp porukama.</Note>
-      </label>
-      <label className="block">
-        <span className="text-sm font-semibold text-slate-700">Ikonica (opciono)</span>
-        <div className="mt-1.5 flex items-center gap-3">
-          <div className="w-20 shrink-0">
-            <input
-              className={`${input} text-center text-xl`}
-              maxLength={8}
-              placeholder="🔄"
-              value={form.icon}
-              onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-            />
-          </div>
-          <span className="text-xs text-slate-500">Emoji koji se prikazuje pored naziva u chatu. Može i bez nje.</span>
-        </div>
-      </label>
-      <label className="block">
-        <span className="text-sm font-semibold text-slate-700">Vrsta</span>
-        <select className={`${input} mt-1.5`} value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as ServiceKind }))}>
+        <span className="text-sm font-semibold text-slate-700">Vrsta usluge</span>
+        <select className={`${input} mt-1.5`} value={form.kind} onChange={(e) => chooseKind(e.target.value as ServiceKind)}>
           {KINDS.map((k) => (
             <option key={k} value={k}>
-              {KIND_LABELS[k]}
+              {KIND_PRESETS[k].icon} {KIND_PRESETS[k].label}
             </option>
           ))}
         </select>
         <Note>
-          Služi za razvrstavanje usluga. Kod „Zamena guma (sezonska)“ kupac može da se prijavi za podsetnik pred sledeću sezonu, pa ga
-          kasnije možete obavestiti iz Podsetnika.
+          Popunjava naziv i ikonicu umesto vas. Kod „Zamena guma (sezonska)“ kupac može i da se prijavi za podsetnik pred sledeću sezonu,
+          pa ga kasnije možete obavestiti iz Podsetnika. Za sve ostalo izaberite „Drugo“.
         </Note>
       </label>
+      <label className="block">
+        <span className="text-sm font-semibold text-slate-700">Naziv</span>
+        <input
+          className={`${input} mt-1.5`}
+          placeholder={form.kind === "other" ? "npr. Pranje vozila" : "npr. Zamena guma"}
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+        />
+        <Note>Ovako kupci vide uslugu u chatu, cenovniku i WhatsApp porukama. Možete ga promeniti.</Note>
+      </label>
+      <div>
+        <span className="text-sm font-semibold text-slate-700">Ikonica (opciono)</span>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {ICONS.map((icon) => {
+            const selected = !form.customIcon && form.icon === icon;
+            return (
+              <button
+                key={icon}
+                type="button"
+                aria-label={`Ikonica ${icon}`}
+                aria-pressed={selected}
+                onClick={() => setForm((f) => ({ ...f, icon: selected ? "" : icon, customIcon: false }))}
+                className={`grid size-11 place-items-center rounded-xl border-2 text-xl ${
+                  selected ? "border-navy-900 bg-accent-500" : "border-slate-200 bg-white"
+                }`}
+              >
+                {icon}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            aria-pressed={form.customIcon}
+            onClick={() => setForm((f) => ({ ...f, icon: f.customIcon ? f.icon : "", customIcon: true }))}
+            className={`h-11 rounded-xl border-2 px-3 text-sm font-semibold ${
+              form.customIcon ? "border-navy-900 bg-accent-500 text-navy-950" : "border-slate-200 bg-white text-slate-700"
+            }`}
+          >
+            Svoja
+          </button>
+        </div>
+        {form.customIcon && (
+          <div className="mt-2 w-24">
+            <input
+              className={`${input} text-center text-xl`}
+              maxLength={8}
+              placeholder="🚿"
+              aria-label="Svoja ikonica"
+              autoFocus
+              value={form.icon}
+              onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
+            />
+          </div>
+        )}
+        <Note>Prikazuje se pored naziva u chatu. Dodirnite izabranu ponovo da je uklonite.</Note>
+      </div>
       <label className="block">
         <span className="text-sm font-semibold text-slate-700">Opis (opciono)</span>
         <input
@@ -201,38 +252,46 @@ function ServiceForm({
             {pickable.map((vt) => {
               const f = priceField(form, vt.id);
               return (
-                <div key={vt.id} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2.5">
-                  <label className="flex w-36 shrink-0 items-center gap-2">
+                <div key={vt.id} className="rounded-xl bg-white px-3 py-2.5">
+                  <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       className="h-4 w-4"
                       checked={f.enabled}
                       onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), enabled: e.target.checked } } }))}
                     />
-                    <span className="text-sm">
+                    <span className="text-sm font-semibold">
                       {vt.icon} {vt.label}
                     </span>
                   </label>
                   {f.enabled && (
-                    <>
-                      <input
-                        type="number"
-                        min={0}
-                        placeholder="Cena (din)"
-                        className={`${input} py-1.5`}
-                        value={f.priceRsd}
-                        onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), priceRsd: e.target.value } } }))}
-                      />
-                      <input
-                        type="number"
-                        min={5}
-                        max={480}
-                        placeholder="Trajanje (min)"
-                        className={`${input} py-1.5`}
-                        value={f.durationMin}
-                        onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), durationMin: e.target.value } } }))}
-                      />
-                    </>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="text-xs text-slate-500">Cena (din)</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          placeholder="npr. 1500"
+                          className={`${input} mt-1 py-2`}
+                          value={f.priceRsd}
+                          onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), priceRsd: e.target.value } } }))}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-slate-500">Trajanje (min), opciono</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={5}
+                          max={480}
+                          placeholder={form.durationMin || "30"}
+                          className={`${input} mt-1 py-2`}
+                          value={f.durationMin}
+                          onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), durationMin: e.target.value } } }))}
+                        />
+                      </label>
+                    </div>
                   )}
                 </div>
               );
@@ -303,7 +362,7 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
                   <p className="font-semibold">
                     {s.icon} {s.name} {!s.isActive && <span className="text-xs font-normal text-slate-500">(isključena)</span>}
                   </p>
-                  <p className="text-sm text-slate-600">{KIND_LABELS[s.kind as ServiceKind]} · {s.durationMin} min{!s.bookable ? " · samo info" : ""}</p>
+                  <p className="text-sm text-slate-600">{KIND_PRESETS[s.kind as ServiceKind]?.label} · {s.durationMin} min{!s.bookable ? " · samo info" : ""}</p>
                   <p className="mt-1 text-sm text-slate-700">
                     {s.prices.length === 0
                       ? "Bez cene"
@@ -363,7 +422,7 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
       {adding ? (
         <ServiceForm
           slug={slug}
-          initial={emptyForm()}
+          initial={emptyForm(services.map((s) => s.kind))}
           vehicleTypes={vehicleTypes}
           submitLabel="Dodaj uslugu"
           onCancel={() => setAdding(false)}
