@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db";
+import { DeleteCampaignButton } from "@/components/admin/reminders/delete-campaign-button";
 import { GenerateQueueButton } from "@/components/admin/reminders/generate-queue-button";
 import { SendQueue } from "@/components/admin/reminders/send-queue";
 import { reminderMessage } from "@/lib/booking/messages";
@@ -7,7 +9,7 @@ import { whatsappLink } from "@/lib/phone";
 import { hasFeature } from "@/lib/plan";
 import { getOrigin } from "@/server/origin";
 import { listCampaigns, listTodayQueue, previewAudience } from "@/server/reminders";
-import { requireOwnerAccess } from "@/server/session";
+import { getAdminBase, requireOwnerAccess } from "@/server/session";
 
 const SEASON_ICON: Record<string, string> = { winter: "❄️", summer: "☀️" };
 
@@ -15,14 +17,18 @@ export default async function CampaignPage({ params }: { params: Promise<{ slug:
   const { slug, campaignId } = await params;
   const { shop } = await requireOwnerAccess(slug);
   if (!hasFeature(shop.plan, "podsetnici")) notFound();
-  const campaigns = await listCampaigns(getDb(), shop.id);
+  const [campaigns, base] = await Promise.all([listCampaigns(getDb(), shop.id), getAdminBase(slug)]);
   const campaign = campaigns.find((c) => c.id === campaignId);
   if (!campaign) notFound();
+  const listHref = `${base}/podsetnici`;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="px-1">
-        <h1 className="font-mono text-xl font-bold">
+        <Link href={listHref} className="inline-flex items-center gap-1 text-sm font-semibold text-navy-700 active:opacity-60">
+          <span aria-hidden>‹</span> Sve kampanje
+        </Link>
+        <h1 className="mt-1 font-mono text-xl font-bold">
           {SEASON_ICON[campaign.season]} {campaign.name}
         </h1>
         <p className="text-sm text-slate-600">„{campaign.messageTemplate}"</p>
@@ -33,6 +39,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ slug:
       ) : (
         <ActiveOrDoneView slug={slug} campaignId={campaignId} shopId={shop.id} shopName={shop.name} template={campaign.messageTemplate} />
       )}
+
+      <DeleteCampaignButton slug={slug} campaignId={campaignId} sentCount={campaign.sent + campaign.booked} listHref={listHref} />
     </div>
   );
 }

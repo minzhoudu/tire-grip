@@ -58,6 +58,15 @@ export async function listCampaigns(db: DB, shopId: string): Promise<CampaignWit
   });
 }
 
+/** Deletes the campaign and its messages (cascade): links in already-sent reminders stop working. Bookings stay. */
+export async function deleteCampaign(db: DB, shopId: string, campaignId: string): Promise<boolean> {
+  const deleted = await db
+    .delete(reminderCampaigns)
+    .where(and(eq(reminderCampaigns.shopId, shopId), eq(reminderCampaigns.id, campaignId)))
+    .returning({ id: reminderCampaigns.id });
+  return deleted.length > 0;
+}
+
 export interface CampaignInput {
   name: string;
   season: Season;

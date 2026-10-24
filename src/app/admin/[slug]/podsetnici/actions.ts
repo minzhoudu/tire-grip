@@ -8,7 +8,7 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { season as seasonEnum } from "@/db/schema";
 import { requireOwnerAccess } from "@/server/session";
-import { createCampaign, generateQueue, markSent, previewAudience, type CampaignInput } from "@/server/reminders";
+import { createCampaign, deleteCampaign, generateQueue, markSent, previewAudience, type CampaignInput } from "@/server/reminders";
 
 const slugSchema = z.string().min(1).max(80);
 
@@ -33,6 +33,13 @@ export async function createCampaignAction(raw: z.input<typeof campaignInput>): 
     dailyLimit: input.data.dailyLimit,
   } satisfies CampaignInput);
   return { ok: true, id };
+}
+
+export async function deleteCampaignAction(raw: { slug: string; campaignId: string }): Promise<{ ok: boolean }> {
+  const input = z.object({ slug: slugSchema, campaignId: z.uuid() }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  return { ok: await deleteCampaign(getDb(), shop.id, input.data.campaignId) };
 }
 
 export async function previewAudienceAction(raw: { slug: string }): Promise<{ count: number }> {

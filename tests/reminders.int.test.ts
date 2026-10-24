@@ -14,6 +14,7 @@ import { bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { createBookingRequest } from "../src/server/bookings.ts";
 import {
   createCampaign,
+  deleteCampaign,
   generateQueue,
   getReminderByToken,
   linkBookingToReminder,
@@ -182,5 +183,24 @@ describe.skipIf(!process.env.DATABASE_URL)("seasonal reminders (Postgres)", () =
     await linkBookingToReminder(db, { shopId, token: msg!.token, bookingId: other.booking.id });
     const [stillFirst] = await db.select().from(reminderMessages).where(eq(reminderMessages.id, msg!.id));
     expect(stillFirst!.bookingId).toBe(booked.booking.id);
+  });
+
+  it("deleting a campaign removes its list (old links stop working) but keeps the bookings it brought in", async () => {
+    const db = getDb();
+    const campaignId = await createCampaign(db, shopId, { name: "Za brisanje", season: "winter", messageTemplate: "x", dailyLimit: null });
+    await generateQueue(db, shopId, campaignId);
+    const [msg] = await db.select().from(reminderMessages).where(eq(reminderMessages.campaignId, campaignId)).limit(1);
+    const booked = await createBookingRequest(db, request({ phone: "064 800 0009", name: "Zakazao iz podsetnika", startsAt: at(16, 30) }));
+    expect(booked.ok).toBe(true);
+    if (!booked.ok) return;
+    await linkBookingToReminder(db, { shopId, token: msg!.token, bookingId: booked.booking.id });
+
+    expect(await deleteCampaign(db, "00000000-0000-0000-0000-000000000000", campaignId)).toBe(false); // another shop can't
+    expect(await deleteCampaign(db, shopId, campaignId)).toBe(true);
+
+    expect(await db.select().from(reminderCampaigns).where(eq(reminderCampaigns.id, campaignId))).toHaveLength(0);
+    expect(await db.select().from(reminderMessages).where(eq(reminderMessages.campaignId, campaignId))).toHaveLength(0);
+    expect(await getReminderByToken(db, msg!.token)).toBeNull();
+    expect(await db.select().from(bookings).where(eq(bookings.id, booked.booking.id))).toHaveLength(1);
   });
 });
