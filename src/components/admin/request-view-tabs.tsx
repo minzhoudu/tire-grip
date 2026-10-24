@@ -11,6 +11,8 @@ import { PendingLink, usePendingNav } from "@/components/ui/pending-nav";
 export function RequestViewTabs({ view, upcomingHref, historyHref }: { view: "upcoming" | "history"; upcomingHref: string; historyHref: string }) {
   const { pending } = usePendingNav();
   const [target, setTarget] = useState<"upcoming" | "history" | null>(null);
+  // While loading, the highlight already moves to the tapped tab, so only one tab ever looks active.
+  const shown = pending && target ? target : view;
 
   return (
     <div className="flex rounded-xl border-2 border-navy-900 bg-white p-1 text-sm font-semibold">
@@ -22,7 +24,7 @@ export function RequestViewTabs({ view, upcomingHref, historyHref }: { view: "up
       ).map(([v, label, href]) => {
         const loading = pending && target === v;
         const className = `flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 ${
-          view === v || loading ? "bg-navy-900 text-white" : "text-slate-600"
+          shown === v ? "bg-navy-900 text-white" : "text-slate-600"
         }`;
         return view === v ? (
           <span key={v} aria-current="page" className={className}>
