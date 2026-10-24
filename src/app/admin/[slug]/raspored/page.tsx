@@ -135,6 +135,7 @@ export default async function SchedulePage({ params, searchParams }: Props) {
       </div>
 
       <ScheduleNav
+        routeKey={`${date}|${view}`}
         view={view}
         dayViewHref={href(todayInView ? today : date, "day")}
         multiViewHref={href(date, "multi")}

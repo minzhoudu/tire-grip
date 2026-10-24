@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import {
   createVehicleTypeAction,
   deleteVehicleTypeAction,
@@ -9,6 +9,7 @@ import {
   setVehicleTypeActiveAction,
   updateVehicleTypeAction,
 } from "@/app/admin/[slug]/podesavanja/actions";
+import { BusyOverlay } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
 import { Toggle } from "@/components/ui/toggle";
 import type { VehicleTypeWithUsage } from "@/server/settings";
@@ -192,6 +193,17 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const takenLabels = vehicleTypes.map((vt) => vt.label);
+  // The toggle flips at once; if the save fails it falls back to the server value when the transition ends.
+  const [activeOverride, setActiveOverride] = useOptimistic<Record<string, boolean>, [string, boolean]>({}, (cur, [id, v]) => ({ ...cur, [id]: v }));
+  const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
+
+  function rowAction(id: string, label: string, action: () => Promise<unknown>) {
+    setBusy({ id, label });
+    startTransition(async () => {
+      await action();
+      router.refresh();
+    });
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -214,20 +226,23 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
               />
             </li>
           ) : (
-            <li key={vt.id} className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${!vt.isActive ? "opacity-60" : ""}`}>
-              <div className="flex items-start gap-3">
+            <li key={vt.id} className="relative rounded-2xl border-2 border-navy-900 bg-white p-4">
+              {pending && busy?.id === vt.id && <BusyOverlay label={busy.label} />}
+              <div className={`flex items-start gap-3 ${!(activeOverride[vt.id] ?? vt.isActive) ? "opacity-60" : ""}`}>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">
-                    {vt.icon} {vt.label} {!vt.isActive && <span className="text-xs font-normal text-slate-500">(isključeno)</span>}
+                    {vt.icon} {vt.label}{" "}
+                    {!(activeOverride[vt.id] ?? vt.isActive) && <span className="text-xs font-normal text-slate-500">(isključeno)</span>}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Toggle
-                    checked={vt.isActive}
+                    checked={activeOverride[vt.id] ?? vt.isActive}
                     disabled={pending}
-                    label={vt.isActive ? "Isključi vrstu vozila" : "Uključi vrstu vozila"}
+                    label={(activeOverride[vt.id] ?? vt.isActive) ? "Isključi vrstu vozila" : "Uključi vrstu vozila"}
                     onChange={(v) =>
                       startTransition(async () => {
+                        setActiveOverride([vt.id, v]);
                         await setVehicleTypeActiveAction({ slug, vehicleTypeId: vt.id, isActive: v });
                         router.refresh();
                       })
@@ -240,7 +255,7 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
                   <button
                     type="button"
                     disabled={idx === 0 || pending}
-                    onClick={() => startTransition(async () => { await moveVehicleTypeAction({ slug, vehicleTypeId: vt.id, direction: "up" }); router.refresh(); })}
+                    onClick={() => rowAction(vt.id, "Pomeram…", () => moveVehicleTypeAction({ slug, vehicleTypeId: vt.id, direction: "up" }))}
                     className="rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-30"
                   >
                     ↑
@@ -248,7 +263,7 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
                   <button
                     type="button"
                     disabled={idx === vehicleTypes.length - 1 || pending}
-                    onClick={() => startTransition(async () => { await moveVehicleTypeAction({ slug, vehicleTypeId: vt.id, direction: "down" }); router.refresh(); })}
+                    onClick={() => rowAction(vt.id, "Pomeram…", () => moveVehicleTypeAction({ slug, vehicleTypeId: vt.id, direction: "down" }))}
                     className="rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-30"
                   >
                     ↓
@@ -263,10 +278,9 @@ export function VehicleTypesEditor({ slug, vehicleTypes }: { slug: string; vehic
                       type="button"
                       disabled={pending}
                       onClick={() =>
-                        startTransition(async () => {
+                        rowAction(vt.id, "Brišem…", async () => {
                           const r = await deleteVehicleTypeAction({ slug, vehicleTypeId: vt.id });
                           if (!r.ok) toast(r.reason === "has_bookings" ? "Vrsta vozila ima zakazane termine, može se samo isključiti." : "Brisanje nije uspelo.", "error");
-                          router.refresh();
                         })
                       }
                       className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"

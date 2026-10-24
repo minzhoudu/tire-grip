@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { changeStatusAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
+import { InlineSpinner } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { ACTIONS, CUSTOMER_CANCEL_REASON, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
@@ -61,6 +62,7 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState<BookingAction | null>(null);
+  const [running, setRunning] = useState<BookingAction | null>(null);
   const [status, setStatus] = useState(b.status);
   const [actions, setActions] = useState(b.actions);
   const [notifyUrl, setNotifyUrl] = useState(b.notifyUrl);
@@ -73,6 +75,7 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
       return;
     }
     setConfirming(null);
+    setRunning(action);
     startTransition(async () => {
       const r = await changeStatusAction({ slug, bookingId: b.id, action });
       if (!r.ok) {
@@ -157,9 +160,20 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
               type="button"
               disabled={pending}
               onClick={() => run(a)}
-              className={`min-w-[7rem] flex-1 rounded-xl px-4 py-3 text-[15px] font-bold active:scale-[0.98] disabled:opacity-50 ${ACTION_STYLES[a]}`}
+              className={`flex min-w-[7rem] flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-[15px] font-bold active:scale-[0.98] ${
+                pending && running === a ? "" : "disabled:opacity-50"
+              } ${ACTION_STYLES[a]}`}
             >
-              {confirming === a ? `Sigurno? ${ACTIONS[a].label}` : ACTIONS[a].label}
+              {pending && running === a ? (
+                <>
+                  <InlineSpinner />
+                  Čuvam…
+                </>
+              ) : confirming === a ? (
+                `Sigurno? ${ACTIONS[a].label}`
+              ) : (
+                ACTIONS[a].label
+              )}
             </button>
           ))}
         </div>

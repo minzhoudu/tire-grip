@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteUserAction, resetUserPasswordAction } from "@/app/platforma/actions";
+import { BusyOverlay } from "@/components/ui/busy";
 import { Menu } from "@/components/ui/menu";
 import { ToastProvider, useToast } from "@/components/ui/toast";
 import { MIN_PASSWORD_LENGTH } from "@/lib/signup/request";
@@ -30,9 +31,11 @@ function UserCard({ user }: { user: PlatformUserRow }) {
   const [resetOpen, setResetOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [pending, startTransition] = useTransition();
+  const [deleting, setDeleting] = useState(false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    setDeleting(false);
     startTransition(async () => {
       const r = await resetUserPasswordAction({ userId: user.id, newPassword: password });
       if (!r.ok) {
@@ -48,6 +51,7 @@ function UserCard({ user }: { user: PlatformUserRow }) {
   function deleteUser() {
     const sure = window.confirm(`Trajno obrisati nalog "${user.name}" (${user.email})? Gubi pristup svim radnjama. Ne može se vratiti.`);
     if (!sure) return;
+    setDeleting(true);
     startTransition(async () => {
       const r = await deleteUserAction({ userId: user.id });
       if (!r.ok) {
@@ -60,7 +64,8 @@ function UserCard({ user }: { user: PlatformUserRow }) {
   }
 
   return (
-    <article className="rounded-2xl border-2 border-navy-900 bg-white p-4">
+    <article className="relative rounded-2xl border-2 border-navy-900 bg-white p-4">
+      {pending && deleting && <BusyOverlay label="Brišem…" />}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-mono font-bold">{user.name}</p>

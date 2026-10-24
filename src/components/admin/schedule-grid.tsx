@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { formatMinutes } from "@/lib/availability/zoned";
 import type { BookingStatus } from "@/lib/booking/status";
 import { BookingCard, type BookingCardData } from "./booking-card";
-import { useScheduleGo } from "./schedule-nav";
+import { usePendingNav } from "@/components/ui/pending-nav";
 
 export interface GridItem {
   /** 1-based lane within the column (the bay, in the 3-day view; always 1 in the day view) */
@@ -74,7 +74,7 @@ function closedSpans(open: GridColumn["open"], start: number, end: number): { fr
 
 export function ScheduleGrid({ slug, startMin, endMin, columns }: { slug: string; startMin: number; endMin: number; columns: GridColumn[] }) {
   const router = useRouter();
-  const go = useScheduleGo();
+  const { go } = usePendingNav();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = columns.flatMap((c) => c.items).find((i) => i.card.id === selectedId) ?? null;
 

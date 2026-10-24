@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { getDb } from "@/db";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { BookingCard, type BookingCardData } from "@/components/admin/booking-card";
+import { RequestViewTabs } from "@/components/admin/request-view-tabs";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist";
 import { TomorrowReminders, type ReminderItem } from "@/components/admin/tomorrow-reminders";
+import { PendingArea, PendingNavProvider } from "@/components/ui/pending-nav";
 import { addDays, dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
 import { customerMessageUrl, listBookings, toBookingCardData, type AdminView } from "@/server/admin";
@@ -49,6 +50,9 @@ export default async function RequestsPage({ params, searchParams }: Props) {
     groups.set(start.date, list);
   }
 
+  const upcomingHref = base;
+  const historyHref = `${base}?view=history`;
+
   const heading = (date: string) => {
     const chip = dayChipLabel(date, today);
     return chip === "Danas" || chip === "Sutra" ? `${chip} · ${dayLongLabel(date)}` : dayLongLabel(date);
@@ -62,49 +66,41 @@ export default async function RequestsPage({ params, searchParams }: Props) {
 
       {reminders.length > 0 && <TomorrowReminders slug={slug} dayLabel={dayLongLabel(tomorrow)} items={reminders} />}
 
-      <div className="flex rounded-xl border-2 border-navy-900 bg-white p-1 text-sm font-semibold">
-        {(
-          [
-            ["upcoming", "Predstojeći"],
-            ["history", "Istorija"],
-          ] as const
-        ).map(([v, label]) => (
-          <Link
-            key={v}
-            href={v === "upcoming" ? base : `${base}?view=${v}`}
-            className={`flex-1 rounded-lg py-2 text-center ${view === v ? "bg-navy-900 text-white" : "text-slate-600"}`}
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
+      {/* The tabs prefetch the other view, so switching is instant (and then quietly refreshed). */}
+      <PendingNavProvider routeKey={view}>
+        <RequestViewTabs view={view} upcomingHref={upcomingHref} historyHref={historyHref} />
 
-      {groups.size === 0 && (
-        <div className="rounded-2xl border-2 border-navy-900 bg-white p-6 text-center text-slate-600">
-          {view === "upcoming" ? (
-            <>
-              <p className="text-3xl" aria-hidden>
-                📭
-              </p>
-              <p className="mt-2 font-semibold">Nema zakazanih termina.</p>
-              <p className="mt-1 text-sm">Novi zahtevi se ovde pojavljuju sami, bez osvežavanja.</p>
-            </>
-          ) : (
-            <p>Nema ranijih termina u poslednjih 60 dana.</p>
-          )}
-        </div>
-      )}
+        <PendingArea>
+          <div className="flex flex-col gap-4">
+            {groups.size === 0 && (
+              <div className="rounded-2xl border-2 border-navy-900 bg-white p-6 text-center text-slate-600">
+                {view === "upcoming" ? (
+                  <>
+                    <p className="text-3xl" aria-hidden>
+                      📭
+                    </p>
+                    <p className="mt-2 font-semibold">Nema zakazanih termina.</p>
+                    <p className="mt-1 text-sm">Novi zahtevi se ovde pojavljuju sami, bez osvežavanja.</p>
+                  </>
+                ) : (
+                  <p>Nema ranijih termina u poslednjih 60 dana.</p>
+                )}
+              </div>
+            )}
 
-      {[...groups].map(([date, cards]) => (
-        <section key={date} aria-label={heading(date)}>
-          <h2 className="mb-2 px-1 font-mono text-sm font-bold tracking-wide text-slate-500 uppercase">{heading(date)}</h2>
-          <div className="flex flex-col gap-3">
-            {cards.map((c) => (
-              <BookingCard key={c.id} slug={slug} booking={c} />
+            {[...groups].map(([date, cards]) => (
+              <section key={date} aria-label={heading(date)}>
+                <h2 className="mb-2 px-1 font-mono text-sm font-bold tracking-wide text-slate-500 uppercase">{heading(date)}</h2>
+                <div className="flex flex-col gap-3">
+                  {cards.map((c) => (
+                    <BookingCard key={c.id} slug={slug} booking={c} />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
-        </section>
-      ))}
+        </PendingArea>
+      </PendingNavProvider>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteExceptionAction, upsertExceptionAction } from "@/app/admin/[slug]/podesavanja/actions";
+import { BusyOverlay } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
 import { ToggleRow } from "@/components/ui/toggle";
 import { input, primaryButton, secondaryButton } from "./ui";
@@ -25,9 +26,11 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
   const [closesAt, setClosesAt] = useState("17:00");
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    setRemovingId(null);
     startTransition(async () => {
       const r = await upsertExceptionAction({ slug, date, closed, opensAt: closed ? undefined : opensAt, closesAt: closed ? undefined : closesAt, note });
       if (!r.ok) {
@@ -65,7 +68,7 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
           <input className={`${input} mt-1.5`} maxLength={120} value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
         <button type="submit" disabled={pending} className={primaryButton}>
-          {pending ? "Čuvam…" : "Sačuvaj izuzetak"}
+          {pending && removingId === null ? "Čuvam…" : "Sačuvaj izuzetak"}
         </button>
       </form>
 
@@ -74,7 +77,8 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
       ) : (
         <ul className="flex flex-col gap-2">
           {exceptions.map((ex) => (
-            <li key={ex.id} className="flex items-center gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
+            <li key={ex.id} className="relative flex items-center gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
+              {pending && removingId === ex.id && <BusyOverlay label="Uklanjam…" />}
               <div className="min-w-0 flex-1">
                 <p className="font-mono font-bold">{ex.date}</p>
                 <p className="truncate text-sm text-slate-600">
@@ -85,13 +89,14 @@ export function ExceptionsEditor({ slug, exceptions, today }: { slug: string; ex
               <button
                 type="button"
                 disabled={pending}
-                onClick={() =>
+                onClick={() => {
+                  setRemovingId(ex.id);
                   startTransition(async () => {
                     await deleteExceptionAction({ slug, id: ex.id });
                     toast("Uklonjeno.");
                     router.refresh();
-                  })
-                }
+                  });
+                }}
                 className={secondaryButton}
               >
                 Ukloni

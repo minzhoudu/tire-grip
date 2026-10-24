@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 3000
+    },
+    {
+      "name": "tire-grip-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["exec", "next", "start", "-p", "3000"],
+      "port": 3000
     }
   ]
 }

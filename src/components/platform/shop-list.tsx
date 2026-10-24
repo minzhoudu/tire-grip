@@ -11,6 +11,7 @@ import {
   setShopActiveAction,
   startImpersonationAction,
 } from "@/app/platforma/actions";
+import { BusyOverlay } from "@/components/ui/busy";
 import { Menu } from "@/components/ui/menu";
 import { ToastProvider, useToast } from "@/components/ui/toast";
 import { Toggle } from "@/components/ui/toggle";
@@ -60,11 +61,15 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
+  // Which card an action is running on, so only that card shows it. `leaving` stays up while another page loads.
+  const [busy, setBusy] = useState<{ id: string; label: string; leaving?: boolean } | null>(null);
+  const busyLabel = (shopId: string) => (busy?.id === shopId && (pending || busy.leaving) ? busy.label : null);
 
   const pendingShops = shops.filter((s) => s.signupStatus === "pending");
   const others = shops.filter((s) => s.signupStatus !== "pending");
 
-  function run(action: () => Promise<{ ok: boolean; error?: string }>, okMsg: string) {
+  function run(shopId: string, label: string, action: () => Promise<{ ok: boolean; error?: string }>, okMsg: string) {
+    setBusy({ id: shopId, label });
     startTransition(async () => {
       const r = await action();
       if (!r.ok) toast(r.error ?? "Nije uspelo.", "error");
@@ -74,19 +79,21 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
   }
 
   function impersonate(shopId: string) {
+    setBusy({ id: shopId, label: "Otvaram panel…" });
     startTransition(async () => {
       const r = await startImpersonationAction({ shopId });
       if (!r.ok) {
         toast(r.error, "error");
         return;
       }
+      setBusy({ id: shopId, label: "Otvaram panel…", leaving: true });
       router.push(r.adminUrl);
     });
   }
 
   function deleteShop(s: PlatformShopRow) {
     const sure = window.confirm(`Trajno obrisati radnju "${s.name}" (/${s.slug})? Brišu se svi termini, kupci i podešavanja. Ne može se vratiti.`);
-    if (sure) run(() => deleteShopAction({ shopId: s.id }), "Radnja obrisana.");
+    if (sure) run(s.id, "Brišem…", () => deleteShopAction({ shopId: s.id }), "Radnja obrisana.");
   }
 
   return (
@@ -96,12 +103,12 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
           <h2 className="px-1 font-mono text-sm font-bold tracking-wide text-slate-500 uppercase">Na čekanju ({pendingShops.length})</h2>
           <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4">
             {pendingShops.map((s) => (
-              <ShopCard key={s.id} shop={s} pending={pending}>
+              <ShopCard key={s.id} shop={s} busyLabel={busyLabel(s.id)}>
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() => run(() => approveShopAction({ shopId: s.id }), "Odobreno.")}
+                    onClick={() => run(s.id, "Odobravam…", () => approveShopAction({ shopId: s.id }), "Odobreno.")}
                     className="flex-1 rounded-xl border-2 border-navy-900 bg-accent-500 px-4 py-2.5 font-mono font-bold text-navy-950 disabled:opacity-50"
                   >
                     Odobri
@@ -109,7 +116,7 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() => run(() => rejectShopAction({ shopId: s.id }), "Odbijeno.")}
+                    onClick={() => run(s.id, "Odbijam…", () => rejectShopAction({ shopId: s.id }), "Odbijeno.")}
                     className="flex-1 rounded-xl border-2 border-red-300 px-4 py-2.5 font-semibold text-red-700 disabled:opacity-50"
                   >
                     Odbij
@@ -128,7 +135,15 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
         ) : (
           <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4">
           {others.map((s) => (
-            <OtherShopCard key={s.id} shop={s} pending={pending} run={run} impersonate={impersonate} deleteShop={deleteShop} />
+            <OtherShopCard
+              key={s.id}
+              shop={s}
+              pending={pending}
+              busyLabel={busyLabel(s.id)}
+              run={run}
+              impersonate={impersonate}
+              deleteShop={deleteShop}
+            />
           ))}
           </div>
         )}
@@ -141,13 +156,15 @@ function List({ shops }: { shops: PlatformShopRow[] }) {
 function OtherShopCard({
   shop: s,
   pending,
+  busyLabel,
   run,
   impersonate,
   deleteShop,
 }: {
   shop: PlatformShopRow;
   pending: boolean;
-  run: (action: () => Promise<{ ok: boolean; error?: string }>, okMsg: string) => void;
+  busyLabel: string | null;
+  run: (shopId: string, label: string, action: () => Promise<{ ok: boolean; error?: string }>, okMsg: string) => void;
   impersonate: (shopId: string) => void;
   deleteShop: (s: PlatformShopRow) => void;
 }) {
@@ -156,14 +173,14 @@ function OtherShopCard({
   const menuItems = [
     ...(s.signupStatus === "approved" ? [{ label: "Uđi kao (podrška)", onClick: () => impersonate(s.id) }] : []),
     ...(s.signupStatus === "rejected"
-      ? [{ label: "Ponovo odobri", onClick: () => run(() => approveShopAction({ shopId: s.id }), "Ponovo odobreno.") }]
+      ? [{ label: "Ponovo odobri", onClick: () => run(s.id, "Odobravam…", () => approveShopAction({ shopId: s.id }), "Ponovo odobreno.") }]
       : []),
     { label: "Dodeli vlasnika", onClick: () => setAssignOpen(true) },
     { label: "Obriši radnju", onClick: () => deleteShop(s), variant: "danger" as const },
   ];
 
   return (
-    <ShopCard shop={s} pending={pending} menu={<Menu items={menuItems} />}>
+    <ShopCard shop={s} busyLabel={busyLabel} menu={<Menu items={menuItems} />}>
       {s.signupStatus === "approved" && (
         <div className="mt-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -171,7 +188,9 @@ function OtherShopCard({
             <select
               disabled={pending}
               defaultValue={s.plan}
-              onChange={(e) => run(() => changeShopPlanAction({ shopId: s.id, plan: e.target.value as PlatformShopRow["plan"] }), "Plan promenjen.")}
+              onChange={(e) =>
+                run(s.id, "Menjam plan…", () => changeShopPlanAction({ shopId: s.id, plan: e.target.value as PlatformShopRow["plan"] }), "Plan promenjen.")
+              }
               className="rounded-lg border-2 border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold"
             >
               {PLANS.map((p) => (
@@ -187,7 +206,7 @@ function OtherShopCard({
               checked={s.isActive}
               disabled={pending}
               label={s.isActive ? "Suspenduj radnju" : "Aktiviraj radnju"}
-              onChange={(v) => run(() => setShopActiveAction({ shopId: s.id, isActive: v }), v ? "Aktivirano." : "Suspendovano.")}
+              onChange={(v) => run(s.id, v ? "Aktiviram…" : "Suspendujem…", () => setShopActiveAction({ shopId: s.id, isActive: v }), v ? "Aktivirano." : "Suspendovano.")}
             />
           </div>
         </div>
@@ -247,18 +266,20 @@ function AssignOwnerForm({ shopId, onClose }: { shopId: string; onClose: () => v
 
 function ShopCard({
   shop: s,
-  pending,
+  busyLabel,
   menu,
   children,
 }: {
   shop: PlatformShopRow;
-  pending: boolean;
+  /** Set while an action runs on this card */
+  busyLabel: string | null;
   menu?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   const status = statusOf(s);
   return (
-    <article className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${pending ? "opacity-90" : ""}`}>
+    <article className="relative rounded-2xl border-2 border-navy-900 bg-white p-4">
+      {busyLabel && <BusyOverlay label={busyLabel} />}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-mono font-bold">{s.name}</p>

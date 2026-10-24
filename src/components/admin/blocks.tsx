@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createBlockAction, deleteBlockAction } from "@/app/admin/[slug]/actions";
+import { BusyOverlay } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
 
 const input =
@@ -112,13 +113,15 @@ export function BlockList({
   const router = useRouter();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   if (blocks.length === 0) return <p className="px-1 text-sm text-slate-500">Nema predstojećih blokada.</p>;
 
   return (
     <ul className="flex flex-col gap-2">
       {blocks.map((b) => (
-        <li key={b.id} className="flex items-center gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
+        <li key={b.id} className="relative flex items-center gap-3 rounded-2xl border-2 border-navy-900 bg-white p-4">
+          {pending && removingId === b.id && <BusyOverlay label="Uklanjam…" />}
           <div className="min-w-0 flex-1">
             <p className="font-mono font-bold">{b.when}</p>
             <p className="truncate text-sm text-slate-600">{[b.bay, b.reason].filter(Boolean).join(" · ") || "Bez razloga"}</p>
@@ -126,13 +129,14 @@ export function BlockList({
           <button
             type="button"
             disabled={pending}
-            onClick={() =>
+            onClick={() => {
+              setRemovingId(b.id);
               startTransition(async () => {
                 await deleteBlockAction({ slug, blockId: b.id });
                 toast("Uklonjeno.");
                 router.refresh();
-              })
-            }
+              });
+            }}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
           >
             Ukloni

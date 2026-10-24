@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import {
   createServiceAction,
   deleteServiceAction,
@@ -10,6 +10,7 @@ import {
   updateServiceAction,
 } from "@/app/admin/[slug]/podesavanja/actions";
 import { formatRsd } from "@/lib/availability/labels";
+import { BusyOverlay } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
 import { Toggle, ToggleRow } from "@/components/ui/toggle";
 import type { ServiceKind, ServiceWithPrices, VehicleTypeWithUsage } from "@/server/settings";
@@ -322,6 +323,17 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const vehicleTypeById = new Map(vehicleTypes.map((vt) => [vt.id, vt]));
+  // The toggle flips at once; if the save fails it falls back to the server value when the transition ends.
+  const [activeOverride, setActiveOverride] = useOptimistic<Record<string, boolean>, [string, boolean]>({}, (cur, [id, v]) => ({ ...cur, [id]: v }));
+  const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
+
+  function rowAction(id: string, label: string, action: () => Promise<unknown>) {
+    setBusy({ id, label });
+    startTransition(async () => {
+      await action();
+      router.refresh();
+    });
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -356,11 +368,13 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
               />
             </li>
           ) : (
-            <li key={s.id} className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${!s.isActive ? "opacity-60" : ""}`}>
-              <div className="flex items-start gap-3">
+            <li key={s.id} className="relative rounded-2xl border-2 border-navy-900 bg-white p-4">
+              {pending && busy?.id === s.id && <BusyOverlay label={busy.label} />}
+              <div className={`flex items-start gap-3 ${!(activeOverride[s.id] ?? s.isActive) ? "opacity-60" : ""}`}>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">
-                    {s.icon} {s.name} {!s.isActive && <span className="text-xs font-normal text-slate-500">(isključena)</span>}
+                    {s.icon} {s.name}{" "}
+                    {!(activeOverride[s.id] ?? s.isActive) && <span className="text-xs font-normal text-slate-500">(isključena)</span>}
                   </p>
                   <p className="text-sm text-slate-600">{KIND_PRESETS[s.kind as ServiceKind]?.label} · {s.durationMin} min{!s.bookable ? " · samo info" : ""}</p>
                   <p className="mt-1 text-sm text-slate-700">
@@ -371,11 +385,12 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Toggle
-                    checked={s.isActive}
+                    checked={activeOverride[s.id] ?? s.isActive}
                     disabled={pending}
-                    label={s.isActive ? "Isključi uslugu" : "Uključi uslugu"}
+                    label={(activeOverride[s.id] ?? s.isActive) ? "Isključi uslugu" : "Uključi uslugu"}
                     onChange={(v) =>
                       startTransition(async () => {
+                        setActiveOverride([s.id, v]);
                         await setServiceActiveAction({ slug, serviceId: s.id, isActive: v });
                         router.refresh();
                       })
@@ -385,10 +400,10 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <div className="flex gap-1">
-                  <button type="button" disabled={idx === 0 || pending} onClick={() => startTransition(async () => { await moveServiceAction({ slug, serviceId: s.id, direction: "up" }); router.refresh(); })} className="rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-30">
+                  <button type="button" disabled={idx === 0 || pending} onClick={() => rowAction(s.id, "Pomeram…", () => moveServiceAction({ slug, serviceId: s.id, direction: "up" }))} className="rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-30">
                     ↑
                   </button>
-                  <button type="button" disabled={idx === services.length - 1 || pending} onClick={() => startTransition(async () => { await moveServiceAction({ slug, serviceId: s.id, direction: "down" }); router.refresh(); })} className="rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-30">
+                  <button type="button" disabled={idx === services.length - 1 || pending} onClick={() => rowAction(s.id, "Pomeram…", () => moveServiceAction({ slug, serviceId: s.id, direction: "down" }))} className="rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-30">
                     ↓
                   </button>
                 </div>
@@ -401,10 +416,9 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
                       type="button"
                       disabled={pending}
                       onClick={() =>
-                        startTransition(async () => {
+                        rowAction(s.id, "Brišem…", async () => {
                           const r = await deleteServiceAction({ slug, serviceId: s.id });
                           if (!r.ok) toast(r.reason === "has_bookings" ? "Usluga ima zakazane termine, može se samo isključiti." : "Brisanje nije uspelo.", "error");
-                          router.refresh();
                         })
                       }
                       className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
