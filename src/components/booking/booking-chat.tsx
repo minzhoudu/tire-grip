@@ -669,47 +669,40 @@ function SlotPicker({
   );
 }
 
+/** A menu-style list (service, then one row per vehicle type) so any number of vehicle types fits a phone. */
 function PriceList({ services, vehicleTypes }: { services: PublicService[]; vehicleTypes: PublicVehicleType[] }) {
-  const used = vehicleTypes.filter((vt) => services.some((s) => s.prices.some((p) => p.vehicleTypeId === vt.id)));
   return (
     <div>
       <p className="font-semibold">💰 Cenovnik</p>
-      <table className="mt-2 w-full text-sm">
-        <thead>
-          <tr className="text-left text-slate-500">
-            <th className="py-1 pr-2 font-medium">Usluga</th>
-            {used.map((vt) => (
-              <th key={vt.id} className="py-1 pl-2 text-right font-medium" title={vt.label}>
-                {vt.icon || vt.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {services.map((s) => (
-            <tr key={s.id} className="border-t border-slate-100">
-              <td className="py-1.5 pr-2">{s.name}</td>
-              {used.map((vt) => {
-                const p = s.prices.find((x) => x.vehicleTypeId === vt.id);
-                return (
-                  <td key={vt.id} className="py-1.5 pl-2 text-right font-mono font-bold whitespace-nowrap tabular-nums text-rust-600">
-                    {p ? formatRsd(p.priceRsd) : "–"}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {/* Explains the icon-only column headers; a type without an icon already shows its name up there. */}
-      {used.some((vt) => vt.icon) && (
-        <p className="mt-2 text-xs text-slate-500">
-          {used
-            .filter((vt) => vt.icon)
-            .map((vt) => `${vt.icon} ${vt.label}`)
-            .join(" · ")}
-        </p>
-      )}
+      <div className="mt-2 flex flex-col gap-3">
+        {services.map((s) => {
+          const rows = vehicleTypes.flatMap((vt) => {
+            const p = s.prices.find((x) => x.vehicleTypeId === vt.id);
+            return p ? [{ vt, priceRsd: p.priceRsd }] : [];
+          });
+          return (
+            <div key={s.id} className="border-t border-slate-100 pt-2 first:border-t-0 first:pt-0">
+              <p className="font-semibold text-slate-900">
+                {s.icon} {s.name}
+              </p>
+              {rows.length === 0 ? (
+                <p className="mt-1 text-sm text-slate-500">Cena na upit</p>
+              ) : (
+                <ul className="mt-1 flex flex-col gap-1 text-sm">
+                  {rows.map(({ vt, priceRsd }) => (
+                    <li key={vt.id} className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 text-slate-600">
+                        {vt.icon} {vt.label}
+                      </span>
+                      <span className="shrink-0 font-mono font-bold whitespace-nowrap tabular-nums text-rust-600">{formatRsd(priceRsd)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
