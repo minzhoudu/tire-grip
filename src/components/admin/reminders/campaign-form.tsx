@@ -77,7 +77,7 @@ export function CampaignForm({ slug, base }: { slug: string; base: string }) {
         <span className="mt-1 block text-xs text-slate-500">Dostupno: {"{ime}"}, {"{link}"}, {"{radnja}"}. Vozilo se ne navodi, kupac ga bira u chatu.</span>
       </label>
       <label className="block">
-        <span className="text-sm font-semibold text-slate-700">Dnevni limit za slanje</span>
+        <span className="text-sm font-semibold text-slate-700">Broj kupaca na spisku za slanje</span>
         <input
           type="number"
           min={1}
@@ -86,7 +86,10 @@ export function CampaignForm({ slug, base }: { slug: string; base: string }) {
           value={dailyLimit}
           onChange={(e) => setDailyLimit(e.target.value)}
         />
-        <span className="mt-1 block text-xs text-slate-500">Koliko poruka najviše da se prikaže za slanje u jednom danu (da kupci ne navale na termine istog dana).</span>
+        <span className="mt-1 block text-xs text-slate-500">
+          Koliko kupaca se prikazuje za slanje odjednom. Kad njima pošaljete, pojavljuju se sledeći. Manji broj vam pomaže da slanje
+          rasporedite kroz više dana.
+        </span>
       </label>
       <button
         type="submit"

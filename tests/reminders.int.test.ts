@@ -1,7 +1,7 @@
 /**
  * Integration tests for seasonal reminder campaigns: audience (consent +
  * swap history, excluding opt-outs and non-swap-only customers), idempotent
- * queue generation, the daily-limit cap, send/opt-out, and attributing a
+ * queue generation, the send-list batch size, send/opt-out, and attributing a
  * resulting booking back to the reminder that prompted it.
  */
 import "dotenv/config";
@@ -107,7 +107,7 @@ describe.skipIf(!process.env.DATABASE_URL)("seasonal reminders (Postgres)", () =
     expect(count).toBe(1); // only Marko
   });
 
-  it("generates the queue once, idempotently, and respects the daily limit", async () => {
+  it("generates the queue once, idempotently, and shows at most the batch size", async () => {
     const db = getDb();
     const campaignId = await createCampaign(db, shopId, { name: "Zima 2026", season: "winter", messageTemplate: "Zdravo {ime}! {radnja}: {link}", dailyLimit: 1 });
 

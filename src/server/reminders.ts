@@ -1,7 +1,7 @@
 /**
  * Seasonal tire-change reminders: owner creates a campaign, generates the
  * list of consenting customers with swap history, and sends a wa.me link to
- * each in daily-limited waves (no messaging API — same trust model as the
+ * each in batches of a set size (no messaging API — same trust model as the
  * "send confirmation" button on booking requests).
  *
  * One message per customer per campaign (not per vehicle): the reminder is
@@ -135,7 +135,7 @@ export interface QueueItem {
   token: string;
 }
 
-/** Up to the campaign's daily limit (unlimited if null), oldest first. */
+/** The next batch still to send: at most `dailyLimit` (all if null), oldest first. Despite the column name it's a batch size, not a per-day cap. */
 export async function listTodayQueue(db: DB, shopId: string, campaignId: string): Promise<QueueItem[]> {
   const [campaign] = await db.select().from(reminderCampaigns).where(and(eq(reminderCampaigns.shopId, shopId), eq(reminderCampaigns.id, campaignId)));
   if (!campaign) return [];

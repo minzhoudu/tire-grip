@@ -85,12 +85,12 @@ async function ActiveOrDoneView({
   }));
 
   if (items.length === 0) {
-    return <p className="rounded-2xl border-2 border-navy-900 bg-white p-4 text-slate-600">Nema više nikog za slanje danas. Kampanja je završena ili je lista potpuno poslata.</p>;
+    return <p className="rounded-2xl border-2 border-navy-900 bg-white p-4 text-slate-600">Svima sa liste je poslato. Kampanja je završena.</p>;
   }
 
   return (
     <div>
-      <p className="mb-2 px-1 text-sm font-semibold text-slate-700">Danas za slanje ({items.length})</p>
+      <p className="mb-2 px-1 text-sm font-semibold text-slate-700">Za slanje ({items.length})</p>
       <SendQueue slug={slug} campaignId={campaignId} items={items} />
     </div>
   );

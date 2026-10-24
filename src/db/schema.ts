@@ -533,7 +533,7 @@ export const reminderCampaigns = pgTable(
     /** Text with placeholders: {ime}, {vozilo}, {link}, {radnja} */
     messageTemplate: text("message_template").notNull(),
     status: campaignStatus("status").notNull().default("draft"),
-    /** Max messages per day — send in waves matched to free capacity */
+    /** How many queued customers the send list shows at once (a batch size, not a per-day cap); null = all */
     dailyLimit: smallint("daily_limit"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

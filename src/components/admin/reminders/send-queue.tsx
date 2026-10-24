@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { markSentAction } from "@/app/admin/[slug]/podsetnici/actions";
+import { InlineSpinner } from "@/components/ui/busy";
 import { formatPhone } from "@/lib/phone";
 
 export interface QueueItem {
@@ -13,7 +15,9 @@ export interface QueueItem {
 
 /** Tap a link to open WhatsApp with the message ready; marks it sent right away, same trust model as BookingCard's "Pošalji na WhatsApp". */
 export function SendQueue({ slug, campaignId, items }: { slug: string; campaignId: string; items: QueueItem[] }) {
+  const router = useRouter();
   const [sent, setSent] = useState<Set<string>>(new Set());
+  const [loadingNext, startTransition] = useTransition();
 
   function markSent(id: string) {
     setSent((s) => new Set(s).add(id));
@@ -22,7 +26,26 @@ export function SendQueue({ slug, campaignId, items }: { slug: string; campaignI
 
   const remaining = items.filter((i) => !sent.has(i.id));
   if (remaining.length === 0) {
-    return <p className="rounded-2xl border-2 border-navy-900 bg-white p-4 text-slate-600">Sve poslato za danas. Vratite se sutra za sledeću talas.</p>;
+    return (
+      <div className="rounded-2xl border-2 border-navy-900 bg-white p-4 text-slate-600">
+        <p>Poslali ste svima sa ovog spiska.</p>
+        <button
+          type="button"
+          disabled={loadingNext}
+          onClick={() => startTransition(() => router.refresh())}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-navy-900 bg-navy-900 px-4 py-3 font-bold text-white disabled:opacity-60"
+        >
+          {loadingNext ? (
+            <>
+              <InlineSpinner />
+              Učitavam…
+            </>
+          ) : (
+            "Prikaži sledeće kupce"
+          )}
+        </button>
+      </div>
+    );
   }
 
   return (
