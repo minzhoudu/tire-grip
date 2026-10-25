@@ -23,6 +23,7 @@ import {
   boolean,
   check,
   date,
+  doublePrecision,
   foreignKey,
   index,
   integer,
@@ -103,6 +104,9 @@ export const shops = pgTable(
     businessLabel: text("business_label"),
     city: text("city"),
     address: text("address"),
+    /** Where the shop is (WGS84), set by the owner with a pin on the map. Both or neither. */
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
     /** E.164, e.g. +381641234567 — used for wa.me / viber links */
     phone: text("phone"),
     timezone: text("timezone").notNull().default("Europe/Belgrade"),
@@ -130,6 +134,10 @@ export const shops = pgTable(
     uniqueIndex("shops_slug_uq").on(t.slug),
     check("shops_slug_format", sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
     check("shops_bays_range", sql`${t.bays} between 1 and 20`),
+    check(
+      "shops_location_valid",
+      sql`(${t.latitude} is null and ${t.longitude} is null) or (${t.latitude} between -90 and 90 and ${t.longitude} between -180 and 180)`,
+    ),
     check("shops_slot_step_range", sql`${t.slotStepMin} between 5 and 240`),
     check("shops_horizon_range", sql`${t.bookingHorizonDays} between 1 and 120`),
     check("shops_min_notice_range", sql`${t.minNoticeMin} between 0 and 2880`),

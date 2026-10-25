@@ -10,6 +10,7 @@ import { addDays, dayChipLabel, dayLongLabel, getDayAvailability, shopToday, utc
 import { formatMinutes } from "../lib/availability/zoned.ts";
 import { cancellationMessage, confirmationMessage, dayBeforeReminderMessage, rejectionMessage } from "../lib/booking/messages.ts";
 import { ACTIONS, FINAL_STATUSES, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
+import { googleMapsUrl } from "../lib/maps-links.ts";
 import { whatsappLink } from "../lib/phone.ts";
 import type { BookingCardData } from "../components/admin/booking-card.tsx";
 import { ADMIN_HORIZON_DAYS } from "./bookings.ts";
@@ -276,7 +277,7 @@ export function notifyKindForStatus(status: BookingStatus): "confirm" | "reject"
 /** wa.me link with the right message for confirm/reject/cancel/day-before reminder — built fresh each time, so it always reflects the booking's current details. */
 export function customerMessageUrl(
   booking: AdminBooking,
-  shop: { name: string; slug: string; address: string | null; timezone: string },
+  shop: { name: string; slug: string; address: string | null; timezone: string; city?: string | null; latitude?: number | null; longitude?: number | null },
   kind: "confirm" | "reject" | "cancel" | "reminder",
   origin: string,
 ): string {
@@ -288,6 +289,11 @@ export function customerMessageUrl(
     time: formatMinutes(local.minutes),
     priceRsd: booking.priceRsd,
     address: shop.address,
+    // Only an exact pin: a search by address text is what sent customers to the wrong town.
+    mapUrl:
+      shop.latitude != null && shop.longitude != null
+        ? googleMapsUrl({ name: shop.name, address: shop.address, city: shop.city ?? null, latitude: shop.latitude, longitude: shop.longitude })
+        : null,
     bookingUrl: shopPublicUrl(shop.slug, origin),
     cancelUrl: kind === "confirm" || kind === "reminder" ? `${origin}/otkazi/${booking.id}` : undefined,
   };

@@ -101,6 +101,7 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
       city: "Novi Sad",
       address: "Bulevar 1",
       phone: "+381641112222",
+      location: { lat: 45.2551, lng: 19.8452 },
     });
     const [row] = await db.select().from(shops).where(eq(shops.id, shopId));
     expect(row).toMatchObject({
@@ -109,7 +110,14 @@ describe.skipIf(!process.env.DATABASE_URL)("settings (Postgres)", () => {
       city: "Novi Sad",
       address: "Bulevar 1",
       phone: "+381641112222",
+      latitude: 45.2551,
+      longitude: 19.8452,
     });
+
+    // clearing the pin clears both coordinates
+    await updateShopInfo(db, shopId, { name: "Novo ime", businessLabel: null, city: null, address: null, phone: null, location: null });
+    const [cleared] = await db.select().from(shops).where(eq(shops.id, shopId));
+    expect(cleared).toMatchObject({ latitude: null, longitude: null });
   });
 
   describe("setup checklist", () => {

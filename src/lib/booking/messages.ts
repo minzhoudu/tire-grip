@@ -8,6 +8,8 @@ export interface CustomerMessageInput {
   time: string; // "08:30"
   priceRsd: number;
   address?: string | null;
+  /** Google Maps link to the shop's pin (only when the shop has set one) */
+  mapUrl?: string | null;
   /** Public booking page, for picking another slot */
   bookingUrl: string;
   /** Self-service cancel link, shown only in the confirmation message */
@@ -21,6 +23,7 @@ export function confirmationMessage(m: CustomerMessageInput): string {
     `${m.serviceName}, ${m.dayLabel} u ${m.time}h.`,
     `Cena: ${formatRsd(m.priceRsd)}.`,
     ...(m.address ? [`Adresa: ${m.address}`] : []),
+    ...(m.mapUrl ? [`Mapa: ${m.mapUrl}`] : []),
     m.cancelUrl ? `Ako ne možete da dođete, otkažite ovde: ${m.cancelUrl}` : "Ako ne možete da dođete, javite nam. Vidimo se!",
   ].join("\n");
 }
@@ -49,6 +52,7 @@ export function dayBeforeReminderMessage(m: CustomerMessageInput): string {
     `🔔 ${m.shopName}: podsetnik za sutra`,
     `${m.serviceName}, ${m.dayLabel} u ${m.time}h.`,
     ...(m.address ? [`Adresa: ${m.address}`] : []),
+    ...(m.mapUrl ? [`Mapa: ${m.mapUrl}`] : []),
     m.cancelUrl ? `Ako ne možete da dođete, otkažite ovde: ${m.cancelUrl}` : "Ako ne možete da dođete, javite nam. Vidimo se!",
   ].join("\n");
 }

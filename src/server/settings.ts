@@ -32,12 +32,22 @@ export interface ShopInfoInput {
   city: string | null;
   address: string | null;
   phone: string | null;
+  /** Pin on the map; null clears it */
+  location: { lat: number; lng: number } | null;
 }
 
 export async function updateShopInfo(db: DB, shopId: string, input: ShopInfoInput): Promise<void> {
   await db
     .update(shops)
-    .set({ name: input.name, businessLabel: input.businessLabel, city: input.city, address: input.address, phone: input.phone })
+    .set({
+      name: input.name,
+      businessLabel: input.businessLabel,
+      city: input.city,
+      address: input.address,
+      phone: input.phone,
+      latitude: input.location?.lat ?? null,
+      longitude: input.location?.lng ?? null,
+    })
     .where(eq(shops.id, shopId));
 }
 

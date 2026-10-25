@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openStatusText } from "../src/lib/availability/labels.ts";
 import { confirmationMessage, dayBeforeReminderMessage } from "../src/lib/booking/messages.ts";
+import { directionsUrls, googleMapsUrl } from "../src/lib/maps-links.ts";
 import { formatPhone, normalizePhone, whatsappLink } from "../src/lib/phone.ts";
 
 describe("normalizePhone", () => {
@@ -59,6 +60,12 @@ describe("confirmationMessage", () => {
     expect(text).toContain("Ako ne možete da dođete, otkažite ovde: https://tiregrip.rs/otkazi/abc-123");
     expect(text).not.toContain("javite nam");
   });
+
+  it("adds the map link only when the shop has a pin", () => {
+    expect(confirmationMessage(base)).not.toContain("Mapa:");
+    const text = confirmationMessage({ ...base, mapUrl: "https://www.google.com/maps/search/?api=1&query=45.233032,19.817513" });
+    expect(text).toContain("Mapa: https://www.google.com/maps/search/?api=1&query=45.233032,19.817513");
+  });
 });
 
 describe("dayBeforeReminderMessage", () => {
@@ -91,5 +98,24 @@ describe("openStatusText", () => {
     [{ open: false as const, nextOpen: null }, "Trenutno ne radimo"],
   ])("%j", (status, expected) => {
     expect(openStatusText(status, today)).toBe(expected);
+  });
+});
+
+describe("map links", () => {
+  const shop = { name: "Brzi Točak", address: "Bolmanska 20", city: "Novi Sad", latitude: 45.2330320436, longitude: 19.8175134183 };
+
+  it("points at the exact pin when the shop has one", () => {
+    expect(googleMapsUrl(shop)).toBe("https://www.google.com/maps/search/?api=1&query=45.233032,19.817513");
+    expect(directionsUrls(shop)).toEqual({
+      google: "https://www.google.com/maps/dir/?api=1&destination=45.233032,19.817513",
+      waze: "https://waze.com/ul?ll=45.233032,19.817513&navigate=yes",
+    });
+  });
+
+  it("falls back to a search by name and address, and has no directions without a pin", () => {
+    const noPin = { ...shop, latitude: null, longitude: null };
+    expect(googleMapsUrl(noPin)).toBe("https://www.google.com/maps/search/?api=1&query=Brzi%20To%C4%8Dak%2C%20Bolmanska%2020%2C%20Novi%20Sad");
+    expect(directionsUrls(noPin)).toBeNull();
+    expect(googleMapsUrl({ ...noPin, address: null })).toBeNull();
   });
 });

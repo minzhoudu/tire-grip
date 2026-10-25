@@ -11,11 +11,19 @@ export default async function ShopInfoPage({ params }: { params: Promise<{ slug:
       <SubpageHeader
         base={await getAdminBase(slug)}
         title="Podaci radnje"
-        description="Naziv, grad, adresa i telefon koje kupci vide na stranici za zakazivanje."
+        description="Naziv, telefon i lokacija koje kupci vide na stranici za zakazivanje."
       />
       <ShopInfoForm
         slug={slug}
-        shop={{ name: shop.name, businessLabel: shop.businessLabel, city: shop.city, address: shop.address, phone: shop.phone }}
+        shop={{
+          name: shop.name,
+          businessLabel: shop.businessLabel,
+          city: shop.city,
+          address: shop.address,
+          phone: shop.phone,
+          latitude: shop.latitude,
+          longitude: shop.longitude,
+        }}
       />
     </div>
   );

@@ -11,6 +11,7 @@ import { serviceKind } from "@/db/schema";
 import { shopToday } from "@/lib/availability";
 import { upcomingSerbianHolidays } from "@/lib/availability/holidays";
 import { normalizePhone } from "@/lib/phone";
+import { searchPlaces, type PlaceKind, type PlaceResult } from "@/server/geocode";
 import { requireOwnerAccess } from "@/server/session";
 import {
   addClosedDays,
@@ -46,6 +47,7 @@ const shopInfoInput = z.object({
   city: z.string().trim().max(80).optional().default(""),
   address: z.string().trim().max(200).optional().default(""),
   phone: z.string().trim().max(30).optional().default(""),
+  location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).nullable(),
 });
 
 export type ShopInfoResult = { ok: true } | { ok: false; errors: Record<string, string> };
@@ -67,8 +69,30 @@ export async function updateShopInfoAction(raw: z.input<typeof shopInfoInput>): 
     city: input.data.city || null,
     address: input.data.address || null,
     phone,
+    location: input.data.location,
   });
   return { ok: true };
+}
+
+/** Town or street suggestions while the owner types (see server/geocode.ts). */
+export async function searchPlacesAction(raw: {
+  slug: string;
+  q: string;
+  kind: PlaceKind;
+  near?: { lat: number; lng: number };
+}): Promise<{ ok: true; results: PlaceResult[] } | { ok: false }> {
+  const input = z
+    .object({
+      slug: slugSchema,
+      q: z.string().trim().min(2).max(100),
+      kind: z.enum(["city", "street"]),
+      near: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional(),
+    })
+    .safeParse(raw);
+  if (!input.success) return { ok: false };
+  await requireOwnerAccess(input.data.slug);
+  const results = await searchPlaces(input.data.q, input.data.kind, input.data.near);
+  return results ? { ok: true, results } : { ok: false };
 }
 
 /* ------------------------------------------------------------------ booking rules */

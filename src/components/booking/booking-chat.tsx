@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useReducer, useRef, useState, useTransition } from "react";
 import {
   getDaysAction,
@@ -14,8 +15,17 @@ import {
 import { formatRsd } from "@/lib/availability/labels";
 import { flowReducer, initialFlow, type FlowState } from "@/lib/booking/flow";
 import { bookingRequestSchema, fieldErrors } from "@/lib/booking/request";
+import { googleMapsUrl } from "@/lib/maps-links";
 import { formatPhone } from "@/lib/phone";
 import type { PublicService, PublicVehicleType } from "@/server/shops";
+
+/** The map library loads only when the customer opens "Kako do nas". */
+const LocationSheet = dynamic(() => import("./location-sheet"), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white p-6 text-center text-sm text-slate-500">Učitavam mapu…</div>
+  ),
+});
 
 export interface ChatShop {
   slug: string;
@@ -24,6 +34,8 @@ export interface ChatShop {
   city: string | null;
   address: string | null;
   phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
   open: boolean;
   statusText: string;
   services: PublicService[];
@@ -427,9 +439,9 @@ function dayChip(days: Load<{ days: DayOption[]; hasMore: boolean }>, date: stri
 /* ------------------------------------------------------------------ pieces */
 
 function Header({ shop }: { shop: ChatShop }) {
-  const mapsUrl = shop.address
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(", "))}`
-    : null;
+  const [showMap, setShowMap] = useState(false);
+  const pinned = shop.latitude !== null && shop.longitude !== null ? { ...shop, latitude: shop.latitude, longitude: shop.longitude } : null;
+  const mapsUrl = googleMapsUrl(shop);
   return (
     <header className="sticky top-0 z-10 shadow-md">
       <div className="flex items-center gap-3 bg-navy-900 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 text-white">
@@ -458,13 +470,20 @@ function Header({ shop }: { shop: ChatShop }) {
           <span className={`size-2.5 rounded-full ${shop.open ? "bg-emerald-500" : "bg-slate-400"}`} aria-hidden />
           {shop.statusText}
         </span>
-        {mapsUrl && (
-          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="truncate text-slate-600 underline-offset-2 hover:underline">
-            📍 {shop.address}
-          </a>
+        {pinned ? (
+          <button type="button" onClick={() => setShowMap(true)} className="truncate text-slate-600 underline underline-offset-2">
+            📍 {shop.address ?? "Kako do nas"}
+          </button>
+        ) : (
+          mapsUrl && (
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="truncate text-slate-600 underline-offset-2 hover:underline">
+              📍 {shop.address}
+            </a>
+          )
         )}
       </div>
       <div className="hazard-stripe" />
+      {showMap && pinned && <LocationSheet place={pinned} onClose={() => setShowMap(false)} />}
     </header>
   );
 }

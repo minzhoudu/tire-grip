@@ -22,6 +22,10 @@ export default function LandingPage() {
               🛞
             </div>
             <p className="font-mono text-lg font-bold">Moj Vulkanizer</p>
+            <Link href="/vulkanizeri" className="ml-auto rounded-full bg-white/10 px-3.5 py-2 text-sm font-semibold whitespace-nowrap active:bg-white/20">
+              🗺️ <span className="sm:hidden">Mapa</span>
+              <span className="hidden sm:inline">Pronađi vulkanizera</span>
+            </Link>
           </div>
           <div className="mt-8 md:flex md:items-end md:justify-between md:gap-10">
             <div className="md:max-w-xl">
@@ -37,6 +41,12 @@ export default function LandingPage() {
               >
                 Registrujte svoju radnju →
               </Link>
+              <p className="mt-4 text-sm text-slate-300">
+                Vozite i tražite vulkanizera?{" "}
+                <Link href="/vulkanizeri" className="font-semibold text-white underline underline-offset-2">
+                  Pogledajte mapu
+                </Link>
+              </p>
             </div>
             <div className="mt-10 hidden shrink-0 rounded-2xl border-2 border-white/20 bg-white/5 p-6 font-mono text-sm text-slate-300 md:block">
               <p className="text-accent-400">$ kupac otvara link</p>

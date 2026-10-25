@@ -37,6 +37,8 @@ export default async function ShopBookingPage({ params, searchParams }: Props) {
     city: ctx.shop.city,
     address: ctx.shop.address,
     phone: ctx.shop.phone,
+    latitude: ctx.shop.latitude,
+    longitude: ctx.shop.longitude,
     open: status.open,
     statusText: openStatusText(status, shopToday(ctx.settings, now)),
     services: ctx.services,
