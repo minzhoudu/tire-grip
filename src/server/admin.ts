@@ -6,7 +6,7 @@
 import { and, asc, desc, eq, gte, gt, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } from "../db/schema.ts";
-import { addDays, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
+import { addDays, dayChipLabel, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
 import { formatMinutes } from "../lib/availability/zoned.ts";
 import { cancellationMessage, confirmationMessage, dayBeforeReminderMessage, rejectionMessage } from "../lib/booking/messages.ts";
 import { ACTIONS, FINAL_STATUSES, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
@@ -104,17 +104,44 @@ export async function listBookings(
       .orderBy(asc(bookings.startsAt), asc(bookings.bay));
   }
 
-  const since = new Date(startOfToday.getTime() - 60 * 86_400_000);
-  return bookingQuery(db)
+  return (await listHistoryPage(db, shop, { now })).rows;
+}
+
+export const HISTORY_PAGE_SIZE = 30;
+
+/** Where the next history page starts: the last booking shown (newest first, id breaks ties). */
+export interface HistoryCursor {
+  startsAt: string;
+  id: string;
+}
+
+/** Closed or past bookings, newest first, one page at a time ("Učitaj još"). No date limit. */
+export async function listHistoryPage(
+  db: DB,
+  shop: { id: string; timezone: string },
+  { cursor, limit = HISTORY_PAGE_SIZE, now = new Date() }: { cursor?: HistoryCursor; limit?: number; now?: Date } = {},
+): Promise<{ rows: AdminBooking[]; next: HistoryCursor | null }> {
+  const startOfToday = zonedToUtc(shopToday(shop, now), 0, shop.timezone);
+  const rows = await bookingQuery(db)
     .where(
       and(
         eq(bookings.shopId, shop.id),
-        gte(bookings.startsAt, since),
         or(inArray(bookings.status, FINAL_STATUSES), lt(bookings.endsAt, startOfToday)),
+        cursor ? sql`(${bookings.startsAt}, ${bookings.id}) < (${cursor.startsAt}::timestamptz, ${cursor.id}::uuid)` : undefined,
       ),
     )
-    .orderBy(desc(bookings.startsAt))
-    .limit(200);
+    .orderBy(desc(bookings.startsAt), desc(bookings.id))
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  return { rows: page, next: rows.length > limit && last ? { startsAt: last.startsAt.toISOString(), id: last.id } : null };
+}
+
+/** "Danas · nedelja 25.10." / "Sutra · …" / "petak 23.10." (with the year when it isn't this year) */
+export function dayHeading(date: string, today: string): string {
+  const chip = dayChipLabel(date, today);
+  const long = dayLongLabel(date) + (date.slice(0, 4) !== today.slice(0, 4) ? `${date.slice(0, 4)}.` : "");
+  return chip === "Danas" || chip === "Sutra" ? `${chip} · ${long}` : long;
 }
 
 /* ------------------------------------------------------------ closing past bookings */

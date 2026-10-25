@@ -1,7 +1,9 @@
 import { getDb } from "@/db";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { BookingCard, type BookingCardData } from "@/components/admin/booking-card";
+import { HistoryList } from "@/components/admin/history-list";
 import { PastBookingsToClose, type PastBookingItem } from "@/components/admin/past-bookings-to-close";
+import { historyPage } from "@/server/history";
 import { RequestViewTabs } from "@/components/admin/request-view-tabs";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist";
 import { TomorrowReminders, type ReminderItem } from "@/components/admin/tomorrow-reminders";
@@ -12,6 +14,7 @@ import {
   AUTO_COMPLETE_AFTER_DAYS,
   autoCompleteStale,
   customerMessageUrl,
+  dayHeading,
   listBookings,
   listBookingsToClose,
   toBookingCardData,
@@ -33,9 +36,10 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const today = shopToday(shop, now);
   const db = getDb();
   await autoCompleteStale(db, shop.id, now);
-  const [rows, toClose] = await Promise.all([
-    listBookings(db, shop, view, now),
+  const [rows, toClose, history] = await Promise.all([
+    view === "upcoming" ? listBookings(db, shop, "upcoming", now) : Promise.resolve([]),
     view === "upcoming" ? listBookingsToClose(db, shop.id, now) : Promise.resolve([]),
+    view === "history" ? historyPage(shop) : Promise.resolve(null),
   ]);
   const yesterday = addDays(today, -1);
   const pastItems: PastBookingItem[] = toClose.map((b) => {
@@ -81,10 +85,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const upcomingHref = base;
   const historyHref = `${base}?view=history`;
 
-  const heading = (date: string) => {
-    const chip = dayChipLabel(date, today);
-    return chip === "Danas" || chip === "Sutra" ? `${chip} · ${dayLongLabel(date)}` : dayLongLabel(date);
-  };
+  const heading = (date: string) => dayHeading(date, today);
 
   return (
     <div className="flex flex-col gap-4">
@@ -101,20 +102,17 @@ export default async function RequestsPage({ params, searchParams }: Props) {
         <RequestViewTabs view={view} upcomingHref={upcomingHref} historyHref={historyHref} />
 
         <PendingArea>
+          {history ? (
+            <HistoryList slug={slug} initial={history.items} initialNext={history.next} />
+          ) : (
           <div className="flex flex-col gap-4">
             {groups.size === 0 && (
               <div className="rounded-2xl border-2 border-navy-900 bg-white p-6 text-center text-slate-600">
-                {view === "upcoming" ? (
-                  <>
-                    <p className="text-3xl" aria-hidden>
-                      📭
-                    </p>
-                    <p className="mt-2 font-semibold">Nema zakazanih termina.</p>
-                    <p className="mt-1 text-sm">Novi zahtevi se ovde pojavljuju sami, bez osvežavanja.</p>
-                  </>
-                ) : (
-                  <p>Nema ranijih termina u poslednjih 60 dana.</p>
-                )}
+                <p className="text-3xl" aria-hidden>
+                  📭
+                </p>
+                <p className="mt-2 font-semibold">Nema zakazanih termina.</p>
+                <p className="mt-1 text-sm">Novi zahtevi se ovde pojavljuju sami, bez osvežavanja.</p>
               </div>
             )}
 
@@ -129,6 +127,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
               </section>
             ))}
           </div>
+          )}
         </PendingArea>
       </PendingNavProvider>
     </div>

@@ -18,6 +18,7 @@ import {
   completeBookings,
   createBlock,
   customerMessageUrl,
+  type HistoryCursor,
   deleteBlock,
   getBooking,
   markNotified,
@@ -29,6 +30,9 @@ import { getOrigin, platformUrl, rootLoginUrl } from "@/server/origin";
 import { endImpersonation, IMPERSONATION_COOKIE, logPlatformAction } from "@/server/platform";
 import { requireShopAccess, requireUser } from "@/server/session";
 import { loadShopContext } from "@/server/shops";
+import { searchShopCustomers, type ShopCustomerRow } from "@/server/customers";
+import { hasFeature } from "@/lib/plan";
+import { historyPage, type HistoryPage } from "@/server/history";
 
 const slugSchema = z.string().min(1).max(80);
 
@@ -63,6 +67,31 @@ export async function changeStatusAction(raw: z.input<typeof statusInput>): Prom
     actions: allowedActions(result.booking.status, result.booking.startsAt, now),
     messageUrl,
   };
+}
+
+/* ------------------------------------------------------------------ "Učitaj još" */
+
+export async function loadHistoryAction(raw: { slug: string; cursor: HistoryCursor }): Promise<({ ok: true } & HistoryPage) | { ok: false }> {
+  const input = z
+    .object({ slug: slugSchema, cursor: z.object({ startsAt: z.iso.datetime(), id: z.uuid() }) })
+    .safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireShopAccess(input.data.slug);
+  return { ok: true, ...(await historyPage(shop, input.data.cursor)) };
+}
+
+export async function loadCustomersAction(raw: {
+  slug: string;
+  q: string;
+  offset: number;
+}): Promise<{ ok: true; rows: ShopCustomerRow[]; hasMore: boolean } | { ok: false }> {
+  const input = z
+    .object({ slug: slugSchema, q: z.string().max(80), offset: z.number().int().min(0).max(100_000) })
+    .safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireShopAccess(input.data.slug);
+  if (!hasFeature(shop.plan, "kupci")) return { ok: false };
+  return { ok: true, ...(await searchShopCustomers(getDb(), shop.id, { q: input.data.q, offset: input.data.offset })) };
 }
 
 /** "Svi su došli" on the past-bookings card. */

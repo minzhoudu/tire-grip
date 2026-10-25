@@ -22,6 +22,8 @@ import {
   deleteBlock,
   listBookings,
   listBookingsToClose,
+  listHistoryPage,
+  type HistoryCursor,
   listDayBlocks,
   listDayBookings,
   listUpcomingBlocks,
@@ -230,6 +232,23 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
     expect(manual.ok && manual.booking.status).toBe("confirmed");
     const [row] = await db.select().from(bookings).where(eq(bookings.id, manual.ok ? manual.booking.id : ""));
     expect(row!.source).toBe("admin");
+  });
+
+  it("pages through history newest first without skipping or repeating", async () => {
+    const db = getDb();
+    const shop = { id: shopId, timezone: TZ };
+    const all = (await listHistoryPage(db, shop, { limit: 1000 })).rows.map((b) => b.id);
+    expect(all.length).toBeGreaterThanOrEqual(3);
+
+    const seen: string[] = [];
+    let cursor: HistoryCursor | undefined;
+    for (let i = 0; i < 100; i++) {
+      const page = await listHistoryPage(db, shop, { limit: 2, cursor });
+      seen.push(...page.rows.map((b) => b.id));
+      if (!page.next) break;
+      cursor = page.next;
+    }
+    expect(seen).toEqual(all);
   });
 
   it("uses the bay tapped in the schedule when it's free, otherwise another one", async () => {

@@ -1,9 +1,9 @@
 /**
- * Customer directory: the shop-side "who's been here" view (listShopCustomers,
+ * Customer directory: the shop-side "who's been here" view (searchShopCustomers,
  * getShopCustomer), and the public phone lookup customers use to find their
  * own bookings without an account (findBookingsByPhone).
  */
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { bookings, customers, services, shops } from "../db/schema.ts";
 import type { BookingStatus } from "../lib/booking/status.ts";
@@ -16,26 +16,54 @@ export interface ShopCustomerRow {
   lastVisitAt: Date | null;
 }
 
-/** Everyone who has ever booked at this shop — "visit" = a completed appointment, most recent visit first. */
-export async function listShopCustomers(db: DB, shopId: string): Promise<ShopCustomerRow[]> {
-  const [customerRows, visitRows] = await Promise.all([
-    db.select({ id: customers.id, name: customers.name, phone: customers.phone }).from(customers).where(eq(customers.shopId, shopId)),
-    db
-      .select({ customerId: bookings.customerId, n: sql<number>`count(*)::int`, lastVisitAt: sql<Date>`max(${bookings.startsAt})` })
-      .from(bookings)
-      .where(and(eq(bookings.shopId, shopId), eq(bookings.status, "completed")))
-      .groupBy(bookings.customerId),
-  ]);
-  const visitByCustomer = new Map(visitRows.map((v) => [v.customerId, v]));
+export const CUSTOMERS_PAGE_SIZE = 50;
 
-  return customerRows
-    .map((c) => {
-      const visit = visitByCustomer.get(c.id);
-      // raw sql`max(...)` comes back from the driver as a string, not a Date — parse it explicitly.
-      const lastVisitAt = visit?.lastVisitAt ? new Date(visit.lastVisitAt) : null;
-      return { id: c.id, name: c.name, phone: c.phone, visitCount: visit?.n ?? 0, lastVisitAt };
-    })
-    .sort((a, b) => (b.lastVisitAt?.getTime() ?? 0) - (a.lastVisitAt?.getTime() ?? 0));
+/** Lowercase without Serbian diacritics, so "petrovic" finds "Petrović". Must match the SQL translate() below. */
+export function foldName(s: string): string {
+  return s.toLowerCase().replace(/[čć]/g, "c").replace(/š/g, "s").replace(/ž/g, "z").replace(/đ/g, "dj");
+}
+
+/** LIKE treats % and _ as wildcards (and \ as the escape): typed literally, they should match literally. */
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+/**
+ * One page of the shop's customers, most recent visit first ("visit" = a completed appointment).
+ * `q` matches the name (case- and diacritics-insensitive) or, with 3+ digits, the phone number.
+ * Counting and sorting happen in the database, so only one page ever leaves it.
+ */
+export async function searchShopCustomers(
+  db: DB,
+  shopId: string,
+  { q = "", offset = 0, limit = CUSTOMERS_PAGE_SIZE }: { q?: string; offset?: number; limit?: number } = {},
+): Promise<{ rows: ShopCustomerRow[]; hasMore: boolean }> {
+  const visits = db
+    .select({ customerId: bookings.customerId, n: sql<number>`count(*)::int`.as("n"), lastVisitAt: sql<string>`max(${bookings.startsAt})`.as("last_visit_at") })
+    .from(bookings)
+    .where(and(eq(bookings.shopId, shopId), eq(bookings.status, "completed")))
+    .groupBy(bookings.customerId)
+    .as("visits");
+
+  const term = q.trim();
+  const digits = term.replace(/\D/g, "").replace(/^0+/, "");
+  const nameMatch = term
+    ? sql`translate(replace(lower(${customers.name}), 'đ', 'dj'), 'čćšž', 'ccsz') like ${`%${escapeLike(foldName(term))}%`}`
+    : undefined;
+  const phoneMatch = digits.length >= 3 ? sql`${customers.phone} like ${`%${digits}%`}` : undefined;
+
+  const rows = await db
+    .select({ id: customers.id, name: customers.name, phone: customers.phone, visitCount: visits.n, lastVisitAt: visits.lastVisitAt })
+    .from(customers)
+    .leftJoin(visits, eq(visits.customerId, customers.id))
+    .where(and(eq(customers.shopId, shopId), term ? (phoneMatch ? or(nameMatch, phoneMatch) : nameMatch) : undefined))
+    .orderBy(sql`${visits.lastVisitAt} desc nulls last`, asc(customers.name), asc(customers.id))
+    .limit(limit + 1)
+    .offset(offset);
+
+  return {
+    // raw sql`max(...)` comes back from the driver as a string, not a Date — parse it explicitly.
+    rows: rows.slice(0, limit).map((r) => ({ ...r, visitCount: r.visitCount ?? 0, lastVisitAt: r.lastVisitAt ? new Date(r.lastVisitAt) : null })),
+    hasMore: rows.length > limit,
+  };
 }
 
 export interface ShopCustomer {

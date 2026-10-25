@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
 import { bookings, customers, services, shops, vehicleTypes } from "../src/db/schema.ts";
 import { listCustomerBookings } from "../src/server/admin.ts";
-import { findBookingsByPhone, getShopBasics, getShopCustomer, listShopCustomers } from "../src/server/customers.ts";
+import { findBookingsByPhone, getShopBasics, getShopCustomer, searchShopCustomers } from "../src/server/customers.ts";
 
 if (process.env.CI && !process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests in CI");
 
@@ -74,12 +74,30 @@ describe.skipIf(!process.env.DATABASE_URL)("customer directory (Postgres)", () =
 
   it("lists customers with completed-visit counts and last-visit date", async () => {
     const db = getDb();
-    const rows = await listShopCustomers(db, shopId);
+    const { rows, hasMore } = await searchShopCustomers(db, shopId);
+    expect(hasMore).toBe(false);
+    expect(rows[0]!.id).toBe(customerAId); // most recent visit first, never-visited last
     const a = rows.find((r) => r.id === customerAId);
     const b = rows.find((r) => r.id === customerBId);
     expect(a).toMatchObject({ name: "Ana Anić", visitCount: 2 });
     expect(a!.lastVisitAt?.toISOString()).toBe("2026-02-10T09:00:00.000Z");
     expect(b).toMatchObject({ name: "Bane Banić", visitCount: 0, lastVisitAt: null });
+  });
+
+  it("searches by name (ignoring case and diacritics) or phone digits, one page at a time", async () => {
+    const db = getDb();
+    const ids = async (q: string) => (await searchShopCustomers(db, shopId, { q })).rows.map((r) => r.id);
+    expect(await ids("ana anic")).toEqual([customerAId]);
+    expect(await ids("anic")).toEqual([customerAId, customerBId]); // "Banić" contains it too
+    expect(await ids("BANIĆ")).toEqual([customerBId]);
+    expect(await ids("064 111 0001")).toEqual([customerAId]);
+    expect(await ids("%")).toEqual([]); // wildcard typed literally
+    expect(await ids("nema takvog")).toEqual([]);
+
+    const first = await searchShopCustomers(db, shopId, { limit: 1 });
+    const second = await searchShopCustomers(db, shopId, { limit: 1, offset: 1 });
+    expect(first).toMatchObject({ hasMore: true, rows: [{ id: customerAId }] });
+    expect(second).toMatchObject({ hasMore: false, rows: [{ id: customerBId }] });
   });
 
   it("gets one customer's basic info, or null if it doesn't belong to this shop", async () => {
