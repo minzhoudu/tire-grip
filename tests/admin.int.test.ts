@@ -4,7 +4,7 @@
  * Needs DATABASE_URL (and BETTER_AUTH_SECRET for sign-in); CI provides both.
  */
 import "dotenv/config";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { isAPIError } from "better-auth/api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/index.ts";
@@ -14,11 +14,14 @@ import { bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { createShopUser, listUserShops } from "../src/server/accounts.ts";
 import {
   adminDaySlots,
+  autoCompleteStale,
   changeBookingStatus,
+  completeBookings,
   countPending,
   createBlock,
   deleteBlock,
   listBookings,
+  listBookingsToClose,
   listDayBlocks,
   listDayBookings,
   listUpcomingBlocks,
@@ -237,6 +240,51 @@ describe.skipIf(!process.env.DATABASE_URL)("admin (Postgres)", () => {
     const b = await createBookingRequest(db, req("064 700 0014"), { source: "admin", preferredBay: 2 });
     expect(b.ok && b.booking.bay).toBe(1);
     expect(await createBookingRequest(db, req("064 700 0015"), { source: "admin", preferredBay: 2 })).toEqual({ ok: false, reason: "slot_unavailable" });
+  });
+
+  it("lists ended confirmed bookings to close, completes them in bulk, and auto-completes after 7 days", async () => {
+    const db = getDb();
+    const shop = { id: shopId, timezone: TZ };
+    const now = new Date();
+    const hour = 3_600_000;
+    // Created in the future (admin source), then moved into the past: the booking rules don't allow past slots.
+    const make = async (phone: string, endedAgoMs: number, status: "confirmed" | "pending" = "confirmed") => {
+      const r = await createBookingRequest(db, request({ phone, startsAt: at(farDate, 8) }), { source: "admin" });
+      if (!r.ok) throw new Error("booking failed");
+      const endsAt = new Date(now.getTime() - endedAgoMs);
+      await db
+        .update(bookings)
+        .set({ status, startsAt: new Date(endsAt.getTime() - 30 * 60_000), endsAt })
+        .where(eq(bookings.id, r.booking.id));
+      return r.booking.id;
+    };
+    const justEnded = await make("064 700 0021", hour);
+    const twoDays = await make("064 700 0022", 48 * hour);
+    const stale = await make("064 700 0023", 8 * 24 * hour);
+    const stalePending = await make("064 700 0024", 9 * 24 * hour, "pending");
+
+    const toClose = (await listBookingsToClose(db, shopId, now)).map((b) => b.id);
+    expect(toClose).toEqual(expect.arrayContaining([justEnded, twoDays]));
+    expect(toClose).not.toContain(stale);
+    expect(toClose).not.toContain(stalePending);
+    // ended today: on the card, not in the upcoming list
+    expect((await listBookings(db, shop, "upcoming", now)).map((b) => b.id)).not.toContain(justEnded);
+
+    expect(await autoCompleteStale(db, shopId, now)).toBe(1);
+    const [staleRow] = await db.select().from(bookings).where(eq(bookings.id, stale));
+    expect(staleRow!.status).toBe("completed");
+    expect(staleRow!.completedAt?.getTime()).toBe(staleRow!.endsAt.getTime());
+    const [pendingRow] = await db.select().from(bookings).where(eq(bookings.id, stalePending));
+    expect(pendingRow!.status).toBe("pending"); // never confirmed: not assumed to have come
+    expect(await autoCompleteStale(db, shopId, now)).toBe(0);
+
+    await changeBookingStatus(db, { shopId, bookingId: twoDays, action: "noShow", now });
+    // the no-show is already closed; another shop can't close ours
+    expect(await completeBookings(db, otherShopId, [justEnded], now)).toBe(0);
+    expect(await completeBookings(db, shopId, [justEnded, twoDays], now)).toBe(1);
+    const rows = await db.select().from(bookings).where(inArray(bookings.id, [justEnded, twoDays]));
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.status]))).toEqual({ [justEnded]: "completed", [twoDays]: "no_show" });
+    expect(await listBookingsToClose(db, shopId, now)).toEqual([]);
   });
 
   it("counts the customer's earlier no-shows on their upcoming bookings", async () => {

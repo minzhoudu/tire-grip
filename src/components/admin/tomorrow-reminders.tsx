@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { markReminderSentAction } from "@/app/admin/[slug]/actions";
+import { sendReminder, useSentReminders } from "./reminder-store";
 
 export interface ReminderItem {
   id: string;
@@ -15,15 +15,14 @@ export interface ReminderItem {
 
 /** Confirmed bookings for tomorrow, each with a one-tap WhatsApp reminder. Shown on the Zahtevi page. */
 export function TomorrowReminders({ slug, dayLabel, items }: { slug: string; dayLabel: string; items: ReminderItem[] }) {
-  const [sentNow, setSentNow] = useState<Set<string>>(new Set());
-  const isSent = (r: ReminderItem) => r.sent || sentNow.has(r.id);
+  const sentHere = useSentReminders();
+  const isSent = (r: ReminderItem) => sentHere(r.id, r.sent);
   const sentCount = items.filter(isSent).length;
   const allSent = sentCount === items.length;
   const [open, setOpen] = useState(!items.every((r) => r.sent));
 
   function send(id: string) {
-    setSentNow((s) => new Set(s).add(id));
-    void markReminderSentAction({ slug, bookingId: id });
+    sendReminder(slug, id);
   }
 
   return (

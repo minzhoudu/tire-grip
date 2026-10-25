@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDb } from "@/db";
+import { autoCompleteStale } from "@/server/admin";
 import { PlanUpgradeNotice } from "@/components/admin/plan-upgrade-notice";
 import { formatPhone } from "@/lib/phone";
 import { hasFeature } from "@/lib/plan";
@@ -31,6 +32,7 @@ export default async function CustomersPage({ params }: { params: Promise<{ slug
     );
   }
 
+  await autoCompleteStale(getDb(), shop.id);
   const [customers, base] = await Promise.all([listShopCustomers(getDb(), shop.id), getAdminBase(slug)]);
 
   return (

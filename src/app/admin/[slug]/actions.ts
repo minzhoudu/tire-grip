@@ -15,6 +15,7 @@ import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatu
 import {
   adminDaySlots,
   changeBookingStatus,
+  completeBookings,
   createBlock,
   customerMessageUrl,
   deleteBlock,
@@ -62,6 +63,14 @@ export async function changeStatusAction(raw: z.input<typeof statusInput>): Prom
     actions: allowedActions(result.booking.status, result.booking.startsAt, now),
     messageUrl,
   };
+}
+
+/** "Svi su došli" on the past-bookings card. */
+export async function completeBookingsAction(raw: { slug: string; ids: string[] }): Promise<{ ok: true; completed: number } | { ok: false }> {
+  const input = z.object({ slug: slugSchema, ids: z.array(z.uuid()).min(1).max(200) }).safeParse(raw);
+  if (!input.success) return { ok: false };
+  const { shop } = await requireShopAccess(input.data.slug);
+  return { ok: true, completed: await completeBookings(getDb(), shop.id, input.data.ids) };
 }
 
 export async function markNotifiedAction(raw: { slug: string; bookingId: string }): Promise<{ ok: boolean }> {

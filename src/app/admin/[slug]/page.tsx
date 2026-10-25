@@ -1,13 +1,22 @@
 import { getDb } from "@/db";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { BookingCard, type BookingCardData } from "@/components/admin/booking-card";
+import { PastBookingsToClose, type PastBookingItem } from "@/components/admin/past-bookings-to-close";
 import { RequestViewTabs } from "@/components/admin/request-view-tabs";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist";
 import { TomorrowReminders, type ReminderItem } from "@/components/admin/tomorrow-reminders";
 import { PendingArea, PendingNavProvider } from "@/components/ui/pending-nav";
 import { addDays, dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
-import { customerMessageUrl, listBookings, toBookingCardData, type AdminView } from "@/server/admin";
+import {
+  AUTO_COMPLETE_AFTER_DAYS,
+  autoCompleteStale,
+  customerMessageUrl,
+  listBookings,
+  listBookingsToClose,
+  toBookingCardData,
+  type AdminView,
+} from "@/server/admin";
 import { getOrigin } from "@/server/origin";
 import { getSetupChecklist } from "@/server/settings";
 import { getAdminBase, requireShopAccess } from "@/server/session";
@@ -22,7 +31,24 @@ export default async function RequestsPage({ params, searchParams }: Props) {
 
   const now = new Date();
   const today = shopToday(shop, now);
-  const rows = await listBookings(getDb(), shop, view, now);
+  const db = getDb();
+  await autoCompleteStale(db, shop.id, now);
+  const [rows, toClose] = await Promise.all([
+    listBookings(db, shop, view, now),
+    view === "upcoming" ? listBookingsToClose(db, shop.id, now) : Promise.resolve([]),
+  ]);
+  const yesterday = addDays(today, -1);
+  const pastItems: PastBookingItem[] = toClose.map((b) => {
+    const start = utcToZoned(b.startsAt, shop.timezone);
+    return {
+      id: b.id,
+      dayLabel: start.date === today ? "Danas" : start.date === yesterday ? "Juče" : dayChipLabel(start.date, today),
+      time: formatMinutes(start.minutes),
+      customerName: b.customerName,
+      serviceName: `${b.serviceIcon ?? ""} ${b.serviceName}`.trim(),
+      bay: shop.bays > 1 ? b.bay : null,
+    };
+  });
   const [origin, base, checklist] = await Promise.all([
     getOrigin(),
     getAdminBase(slug),
@@ -46,7 +72,9 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       });
     }
     const list = groups.get(start.date) ?? [];
-    list.push(toBookingCardData(b, shop, origin, now));
+    const card = toBookingCardData(b, shop, origin, now);
+    const reminder = reminders.find((r) => r.id === b.id);
+    list.push(reminder ? { ...card, reminder: { url: reminder.url, sent: reminder.sent } } : card);
     groups.set(start.date, list);
   }
 
@@ -63,6 +91,8 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       {view === "upcoming" && <AutoRefresh seconds={30} />}
 
       {view === "upcoming" && checklist && <SetupChecklistCard checklist={checklist} base={base} />}
+
+      {pastItems.length > 0 && <PastBookingsToClose slug={slug} items={pastItems} autoDays={AUTO_COMPLETE_AFTER_DAYS} />}
 
       {reminders.length > 0 && <TomorrowReminders slug={slug} dayLabel={dayLongLabel(tomorrow)} items={reminders} />}
 

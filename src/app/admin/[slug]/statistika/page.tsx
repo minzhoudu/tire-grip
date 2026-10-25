@@ -1,4 +1,5 @@
 import { getDb } from "@/db";
+import { autoCompleteStale } from "@/server/admin";
 import { PlanUpgradeNotice } from "@/components/admin/plan-upgrade-notice";
 import { formatRsd } from "@/lib/availability/labels";
 import { hasFeature } from "@/lib/plan";
@@ -28,6 +29,7 @@ export default async function StatsPage({ params }: { params: Promise<{ slug: st
     );
   }
 
+  await autoCompleteStale(getDb(), shop.id);
   const stats = await getShopStats(getDb(), shop);
 
   const maxWeekCount = Math.max(1, ...stats.weeks.map((w) => w.count));

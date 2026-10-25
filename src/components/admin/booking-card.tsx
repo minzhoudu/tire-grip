@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { changeStatusAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
 import { InlineSpinner } from "@/components/ui/busy";
+import { sendReminder, useSentReminders } from "./reminder-store";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { ACTIONS, CUSTOMER_CANCEL_REASON, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
@@ -30,6 +31,8 @@ export interface BookingCardData {
   notifyUrl: string | null;
   /** Earlier "nije došao" bookings by this customer at this shop */
   customerNoShows: number;
+  /** Confirmed and tomorrow: the card's WhatsApp sends the day-before reminder (shared with the "Podsetnici za sutra" card). */
+  reminder?: { url: string; sent: boolean };
 }
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -68,6 +71,8 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
   const [status, setStatus] = useState(b.status);
   const [actions, setActions] = useState(b.actions);
   const [notifyUrl, setNotifyUrl] = useState(b.notifyUrl);
+  const sentHere = useSentReminders();
+  const reminderDue = b.reminder && status === "confirmed" && !sentHere(b.id, b.reminder.sent);
 
   const isDestructive = (a: BookingAction) => a === "reject" || a === "cancel" || a === "noShow";
 
@@ -128,9 +133,24 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
           <a href={`tel:${b.customerPhone}`} className="font-medium text-navy-700 underline-offset-2 hover:underline">
             📞 {formatPhone(b.customerPhone)}
           </a>
-          <a href={chatUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700">
-            WhatsApp
-          </a>
+          {reminderDue ? (
+            <a
+              href={b.reminder!.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => sendReminder(slug, b.id)}
+              className="rounded-full bg-[#25d366] px-3 py-1 font-semibold text-white active:scale-[0.98]"
+            >
+              🔔 Pošalji podsetnik
+            </a>
+          ) : (
+            <>
+              <a href={chatUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700">
+                WhatsApp
+              </a>
+              {b.reminder && status === "confirmed" && <span className="text-xs font-semibold text-emerald-700">Podsetnik poslat ✓</span>}
+            </>
+          )}
           <span className="ml-auto font-mono font-bold tabular-nums text-rust-600">{formatRsd(b.priceRsd)}</span>
         </div>
         {cancelledByCustomer && (

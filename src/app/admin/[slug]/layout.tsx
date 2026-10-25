@@ -38,8 +38,8 @@ export default async function AdminShopLayout({
   return (
     <ToastProvider>
       <div className="flex min-h-dvh bg-slate-100 md:items-stretch">
-        {/* Desktop sidebar — mobile keeps the sticky top header + tabs below instead. */}
-        <aside className="hidden print:hidden! md:flex md:w-64 md:shrink-0 md:flex-col md:bg-navy-900 md:text-white">
+        {/* Desktop sidebar, always exactly one screen tall (sticky); mobile keeps the sticky top header + tabs below instead. */}
+        <aside className="hidden print:hidden! md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col md:self-start md:bg-navy-900 md:text-white">
           <div className="flex items-start justify-between gap-2 p-5">
             <div className="min-w-0">
               <p className="truncate font-mono text-lg leading-tight font-bold">{shop.name}</p>
@@ -47,7 +47,7 @@ export default async function AdminShopLayout({
             </div>
             {!isImpersonating && <ShopSwitcher otherShops={otherShops} addShopUrl={newShopUrl} />}
           </div>
-          <div className="flex-1 px-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3">
             <AdminSidebar base={base} pending={pending} isOwner={role === "owner"} plan={shop.plan} />
           </div>
           <div className="flex flex-col gap-2 p-4">

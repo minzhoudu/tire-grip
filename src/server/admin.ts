@@ -3,7 +3,7 @@
  * scopes every query by it — callers get it from requireShopAccess(), never
  * from user input.
  */
-import { and, asc, desc, eq, gte, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, gt, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } from "../db/schema.ts";
 import { addDays, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
@@ -92,7 +92,15 @@ export async function listBookings(
 
   if (view === "upcoming") {
     return bookingQuery(db)
-      .where(and(eq(bookings.shopId, shop.id), inArray(bookings.status, open), gte(bookings.endsAt, startOfToday)))
+      .where(
+        and(
+          eq(bookings.shopId, shop.id),
+          inArray(bookings.status, open),
+          gte(bookings.endsAt, startOfToday),
+          // Confirmed and already over: listed under "Prošli termini za zaključiti" instead (listBookingsToClose).
+          not(and(eq(bookings.status, "confirmed"), lte(bookings.endsAt, now))!),
+        ),
+      )
       .orderBy(asc(bookings.startsAt), asc(bookings.bay));
   }
 
@@ -107,6 +115,47 @@ export async function listBookings(
     )
     .orderBy(desc(bookings.startsAt))
     .limit(200);
+}
+
+/* ------------------------------------------------------------ closing past bookings */
+
+/** Confirmed bookings still open this long after they ended are closed as completed (autoCompleteStale). */
+export const AUTO_COMPLETE_AFTER_DAYS = 7;
+
+/** Confirmed bookings that are over but not yet marked "Završeno" / "Nije došao", oldest first. */
+export async function listBookingsToClose(db: DB, shopId: string, now = new Date()): Promise<AdminBooking[]> {
+  const cutoff = new Date(now.getTime() - AUTO_COMPLETE_AFTER_DAYS * 86_400_000);
+  return bookingQuery(db)
+    .where(and(eq(bookings.shopId, shopId), eq(bookings.status, "confirmed"), lte(bookings.endsAt, now), gte(bookings.endsAt, cutoff)))
+    .orderBy(asc(bookings.startsAt), asc(bookings.bay));
+}
+
+/**
+ * "Svi su došli": marks these bookings completed. Only ones of this shop that are still confirmed and
+ * already started, so a stale screen can't touch anything else. Returns how many changed.
+ */
+export async function completeBookings(db: DB, shopId: string, ids: string[], now = new Date()): Promise<number> {
+  if (ids.length === 0) return 0;
+  const updated = await db
+    .update(bookings)
+    .set({ status: "completed", completedAt: now, updatedAt: now })
+    .where(and(eq(bookings.shopId, shopId), inArray(bookings.id, ids), eq(bookings.status, "confirmed"), lte(bookings.startsAt, now)))
+    .returning({ id: bookings.id });
+  return updated.length;
+}
+
+/**
+ * Nobody closed them within AUTO_COMPLETE_AFTER_DAYS: assume the customer came, so revenue and visits
+ * stay right. Runs when the pages that depend on it load (no cron needed); a no-op most of the time.
+ */
+export async function autoCompleteStale(db: DB, shopId: string, now = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - AUTO_COMPLETE_AFTER_DAYS * 86_400_000);
+  const updated = await db
+    .update(bookings)
+    .set({ status: "completed", completedAt: sql`${bookings.endsAt}`, updatedAt: now })
+    .where(and(eq(bookings.shopId, shopId), eq(bookings.status, "confirmed"), lt(bookings.endsAt, cutoff)))
+    .returning({ id: bookings.id });
+  return updated.length;
 }
 
 /** Everything this customer has ever booked at this shop, newest first — for the admin's customer history view. */
