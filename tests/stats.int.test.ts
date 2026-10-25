@@ -77,6 +77,8 @@ describe.skipIf(!process.env.DATABASE_URL)("shop stats (Postgres)", () => {
       row(2, 2, 9, "cancelled", swapId, 1500), // 2 weeks ago: counts only
       row(3, 3, 9, "completed", swapId, 1500), // another completed swap, for top-services ranking
       row(10, 2, 9, "completed", swapId, 9999), // 10 weeks ago: outside the 8-week window, must be excluded entirely
+      row(-1, 3, 9, "pending", repairId, 800), // next week: not in any bar, only "Zakazano unapred"
+      row(-2, 3, 9, "cancelled", repairId, 800), // cancelled in the future: nowhere
     ]);
   });
 
@@ -89,16 +91,16 @@ describe.skipIf(!process.env.DATABASE_URL)("shop stats (Postgres)", () => {
     await closeDb();
   });
 
-  it("buckets by week (zero-filled), counting all statuses but only completed revenue", async () => {
+  it("buckets by week (zero-filled), counting only confirmed/completed/no-show, revenue only from completed", async () => {
     const stats = await getShopStats(getDb(), { id: shopId, timezone: TZ }, 8, now);
     expect(stats.weeks).toHaveLength(8);
-    expect(stats.weeks[7]).toMatchObject({ weekStart: currentMonday, count: 1, revenueRsd: 0 }); // this week: pending only
+    expect(stats.weeks[7]).toMatchObject({ weekStart: currentMonday, count: 0, revenueRsd: 0 }); // this week: pending only, not counted
 
     const lastWeek = stats.weeks[6]!;
     expect(lastWeek).toMatchObject({ count: 2, revenueRsd: 1500 }); // completed + no_show, revenue from the completed one only
 
     const twoWeeksAgo = stats.weeks[5]!;
-    expect(twoWeeksAgo).toMatchObject({ count: 1, revenueRsd: 0 }); // cancelled: counted, no revenue
+    expect(twoWeeksAgo).toMatchObject({ count: 0, revenueRsd: 0 }); // cancelled: not counted
 
     const emptyWeek = stats.weeks[0]!; // 7 weeks ago: nothing was inserted there
     expect(emptyWeek).toMatchObject({ count: 0, revenueRsd: 0 });
@@ -106,10 +108,20 @@ describe.skipIf(!process.env.DATABASE_URL)("shop stats (Postgres)", () => {
 
   it("excludes anything older than the window, and totals match the sum of the weeks shown", async () => {
     const stats = await getShopStats(getDb(), { id: shopId, timezone: TZ }, 8, now);
-    // 5 bookings fall inside the 8-week window; the 10-weeks-ago one (9999 din) must not leak in.
-    expect(stats.totalCount).toBe(5);
+    // 5 bookings fall inside the 8-week window; 3 count (pending and cancelled don't); the 10-weeks-ago one (9999 din) must not leak in.
+    expect(stats.totalCount).toBe(3);
+    expect(stats.cancelledCount).toBe(1); // the future cancelled one is outside the window
     expect(stats.totalRevenueRsd).toBe(3000); // the two completed swaps inside the window, 1500 each
     expect(stats.totalRevenueRsd).toBe(stats.weeks.reduce((sum, w) => sum + w.revenueRsd, 0));
+    expect(stats.totalCount).toBe(stats.weeks.reduce((sum, w) => sum + w.count, 0));
+    expect(stats.byWeekday.reduce((sum, d) => sum + d.count, 0)).toBe(stats.totalCount);
+  });
+
+  it("counts future pending/confirmed bookings separately as upcoming", async () => {
+    const stats = await getShopStats(getDb(), { id: shopId, timezone: TZ }, 8, now);
+    // next week's pending one, plus this week's pending one if it's still ahead of now
+    const thisWeekPendingAhead = at(addDays(currentMonday, 1), 9).getTime() >= now.getTime() ? 1 : 0;
+    expect(stats.upcomingCount).toBe(1 + thisWeekPendingAhead);
   });
 
   it("no-show rate counts only bookings that have reached their time (completed + no_show)", async () => {
@@ -120,11 +132,11 @@ describe.skipIf(!process.env.DATABASE_URL)("shop stats (Postgres)", () => {
 
   it("ranks services by booking count and aggregates weekday counts across weeks", async () => {
     const stats = await getShopStats(getDb(), { id: shopId, timezone: TZ }, 8, now);
-    expect(stats.topServices[0]).toMatchObject({ serviceId: swapId, count: 4 });
+    expect(stats.topServices[0]).toMatchObject({ serviceId: swapId, count: 2 });
     expect(stats.topServices[1]).toMatchObject({ serviceId: repairId, count: 1 });
 
-    const tuesday = stats.byWeekday.find((d) => d.weekday === 2)!; // weekday 2 bookings: this week + 2 weeks ago
-    expect(tuesday.count).toBe(2);
+    const byDay = Object.fromEntries(stats.byWeekday.map((d) => [d.weekday, d.count]));
+    expect(byDay).toMatchObject({ 2: 0, 3: 2, 4: 1 }); // Tuesday had only pending + cancelled
   });
 
   it("returns a null no-show rate and empty weeks for a shop with no bookings yet", async () => {

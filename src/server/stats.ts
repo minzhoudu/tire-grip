@@ -3,7 +3,7 @@
  * rate, busiest weekday and most-booked services, over a fixed window
  * (last `weeks` weeks, Monday–Sunday in the shop's timezone).
  */
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { DB } from "../db/index.ts";
 import { bookings, services } from "../db/schema.ts";
 import { addDays, isoWeekday, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
@@ -28,6 +28,10 @@ export interface ShopStats {
   /** no_show / (completed + no_show) over the window, as a 0–100 number; null until any booking has reached its time. */
   noShowRate: number | null;
   byWeekday: { weekday: number; count: number }[]; // 1 (Mon) .. 7 (Sun)
+  /** Cancelled or rejected in the window: shown next to the count, never inside it. */
+  cancelledCount: number;
+  /** Pending or confirmed bookings from now on, outside the window: "Zakazano unapred". */
+  upcomingCount: number;
   topServices: ServiceStat[];
 }
 
@@ -39,12 +43,20 @@ export async function getShopStats(db: DB, shop: { id: string; timezone: string 
   const currentMonday = mondayOf(shopToday(shop, now));
   const windowStartMonday = addDays(currentMonday, -(weeks - 1) * 7);
   const windowStart = zonedToUtc(windowStartMonday, 0, shop.timezone);
+  // Up to the end of this week: later bookings have no bar to land in, and would make the totals disagree with the weeks shown.
+  const windowEnd = zonedToUtc(addDays(currentMonday, 7), 0, shop.timezone);
 
-  const rows = await db
+  const upcoming = db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(bookings)
+    .where(and(eq(bookings.shopId, shop.id), inArray(bookings.status, ["pending", "confirmed"]), gte(bookings.startsAt, now)));
+
+  const rowsQuery = db
     .select({ startsAt: bookings.startsAt, status: bookings.status, priceRsd: bookings.priceRsd, serviceId: services.id, serviceName: services.name, serviceIcon: services.icon })
     .from(bookings)
     .innerJoin(services, and(eq(services.id, bookings.serviceId), eq(services.shopId, bookings.shopId)))
-    .where(and(eq(bookings.shopId, shop.id), gte(bookings.startsAt, windowStart)));
+    .where(and(eq(bookings.shopId, shop.id), gte(bookings.startsAt, windowStart), lt(bookings.startsAt, windowEnd)));
+  const [rows, [upcomingRow]] = await Promise.all([rowsQuery, upcoming]);
 
   const weekBuckets = new Map<string, WeekStat>();
   for (let i = 0; i < weeks; i++) {
@@ -56,7 +68,14 @@ export async function getShopStats(db: DB, shop: { id: string; timezone: string 
   let completed = 0;
   let noShow = 0;
 
+  let cancelled = 0;
   for (const r of rows) {
+    // Only appointments that happened or are agreed count; a cancelled or never-confirmed one isn't demand served.
+    if (r.status === "cancelled" || r.status === "rejected") {
+      cancelled++;
+      continue;
+    }
+    if (r.status === "pending") continue;
     const local = utcToZoned(r.startsAt, shop.timezone);
     const week = weekBuckets.get(mondayOf(local.date));
     if (week) {
@@ -76,10 +95,12 @@ export async function getShopStats(db: DB, shop: { id: string; timezone: string 
   const weeksList = [...weekBuckets.values()];
   return {
     weeks: weeksList,
-    totalCount: rows.length,
+    totalCount: weeksList.reduce((sum, w) => sum + w.count, 0),
+    cancelledCount: cancelled,
     totalRevenueRsd: weeksList.reduce((sum, w) => sum + w.revenueRsd, 0),
     noShowRate: completed + noShow > 0 ? (noShow / (completed + noShow)) * 100 : null,
     byWeekday: [...weekdayCounts.entries()].map(([weekday, count]) => ({ weekday, count })),
     topServices: [...serviceCounts.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+    upcomingCount: upcomingRow?.n ?? 0,
   };
 }
