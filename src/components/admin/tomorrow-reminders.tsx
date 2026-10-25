@@ -19,7 +19,7 @@ export function TomorrowReminders({ slug, dayLabel, items }: { slug: string; day
   const isSent = (r: ReminderItem) => sentHere(r.id, r.sent);
   const sentCount = items.filter(isSent).length;
   const allSent = sentCount === items.length;
-  const [open, setOpen] = useState(!items.every((r) => r.sent));
+  const [open, setOpen] = useState(false);
 
   function send(id: string) {
     sendReminder(slug, id);

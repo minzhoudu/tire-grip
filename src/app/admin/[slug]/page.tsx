@@ -65,7 +65,9 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const groups = new Map<string, BookingCardData[]>();
   for (const b of rows) {
     const start = utcToZoned(b.startsAt, shop.timezone);
-    if (view === "upcoming" && b.status === "confirmed" && start.date === tomorrow) {
+    // Booked today for tomorrow: the customer just arranged it, a reminder would be noise.
+    const bookedToday = utcToZoned(b.createdAt, shop.timezone).date === today;
+    if (view === "upcoming" && b.status === "confirmed" && start.date === tomorrow && !bookedToday) {
       reminders.push({
         id: b.id,
         time: formatMinutes(start.minutes),
