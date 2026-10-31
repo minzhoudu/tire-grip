@@ -104,6 +104,21 @@ Testovi: `tests/booking-status.test.ts`, `tests/admin.int.test.ts` (prijava, sta
 
 Testovi: `tests/platform.int.test.ts` (dashboard, suspenzija, plan, impersonacija) i `tests/signup.int.test.ts` (registracija, duple adrese/emailovi, slaba lozinka).
 
+## Obaveštenja za radnju (push na telefon)
+
+Kad kupac pošalje zahtev ili sam otkaže termin, svi članovi radnje dobijaju obaveštenje na telefon, bez posebne aplikacije u prodavnici: admin panel je PWA koji se doda na početni ekran, a obaveštenja idu preko Web Push-a (VAPID, biblioteka `web-push`).
+
+- **Android (Chrome):** panel → Meni → Obaveštenja → „Uključi obaveštenja“.
+- **iPhone (iOS 16.4+):** Safari → Podeli → „Dodaj na početni ekran“, pa u aplikaciji sa početnog ekrana → Obaveštenja → „Uključi obaveštenja“. Stranica sama prepozna iPhone i prikaže ova 3 koraka. Na Zahtevima stoji kartica koja podseća na ovo dok se ne uključi.
+- **Email kao rezerva (podrazumevano isključen):** član koji ga uključi na stranici Obaveštenja (`shop_members.email_notifications`) dobija isti sadržaj na email (Resend) kad nijedan njegov uređaj nije primio push.
+- Klik na obaveštenje otvara panel na tom zahtevu; broj na ikonici aplikacije = broj zahteva koji čekaju.
+
+Kako radi: `push_subscriptions` čuva po jedan red za svaki uređaj člana (po radnji). `src/server/notifications.ts` (`notifyShop`) šalje svakom trenutnom članu, briše uređaje koje push servis prijavi kao nepostojeće (404/410) i šalje email onima do kojih push nije stigao. Poziva se iz `submitBookingAction` i `cancelBookingAction` preko `after()` (`src/server/notify-later.ts`), pa ne usporava kupca i ne može da obori rezervaciju. Service worker je `public/sw.js`, a manifest se pravi za svaku radnju posebno (`/admin/{slug}/app.webmanifest`). Server šalje samo na adrese pravih push servisa (Apple, Google, Mozilla, Microsoft), vidi `src/lib/notifications/endpoint.ts`.
+
+Ključevi (jednom, pa u env): `pnpm dlx web-push generate-vapid-keys` → `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`. Bez njih push je isključen (stranica to kaže), a obaveštenja idu samo na email onima koji su ga uključili.
+
+Testovi: `tests/notifications.test.ts` (tekstovi, dozvoljene adrese) i `tests/notifications.int.test.ts` (ko dobija push, ko email, čišćenje uređaja).
+
 ## Deploy
 
 ### Za početak, besplatno: Vercel + Neon
@@ -117,6 +132,8 @@ Testovi: `tests/platform.int.test.ts` (dashboard, suspenzija, plan, impersonacij
    - `BETTER_AUTH_SECRET` — `openssl rand -base64 32`
    - `BETTER_AUTH_URL` — Vercel-ov URL aplikacije (npr. `https://tire-grip.vercel.app`, ili sopstveni domen)
    - `PLATFORM_ADMIN_EMAILS` — email vlasnika platforme
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` — za push obaveštenja (vidi „Obaveštenja za radnju“)
+   - `RESEND_API_KEY`, `EMAIL_FROM` — za email (potvrda naloga, reset lozinke, rezervna obaveštenja)
 4. Project Settings → General → Node.js Version: **22.x**.
 5. Deploy. Prvi nalog preko `/registracija` (javna, pravi i radnju i vlasnika).
 
@@ -129,6 +146,8 @@ Promenljive okruženja na aplikaciji u Coolify-ju (isto kao u `.env.example`, sa
 - `BETTER_AUTH_SECRET` — `openssl rand -base64 32`, čuva se stabilno (ne menja se posle prvog deploy-a)
 - `BETTER_AUTH_URL` — javni URL aplikacije, npr. `https://app.example.rs`
 - `PLATFORM_ADMIN_EMAILS` — email vlasnika platforme
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` — za push obaveštenja; isti par kao na Vercelu, inače se svi uređaji moraju ponovo prijaviti
+- `RESEND_API_KEY`, `EMAIL_FROM` — email
 
 Post-deployment Command u podešavanjima aplikacije: `pnpm db:setup` (primeni migracije pri svakom deploy-u).
 

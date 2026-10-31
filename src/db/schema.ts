@@ -156,9 +156,37 @@ export const shopMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: memberRole("role").notNull().default("owner"),
+    /** Opt-in: email this member about new requests/cancellations when none of their devices has push turned on. */
+    emailNotifications: boolean("email_notifications").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [unique("shop_members_shop_user_uq").on(t.shopId, t.userId), index("shop_members_user_idx").on(t.userId)],
+);
+
+/**
+ * One device (browser / home-screen app) of a shop member that gets Web Push
+ * notifications for that shop. Only current members are notified, so a row
+ * left behind after someone leaves the shop is simply never used.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Push service URL (FCM, Apple, Mozilla…) — unique per device and browser. */
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [unique("push_subscriptions_shop_endpoint_uq").on(t.shopId, t.endpoint), index("push_subscriptions_user_idx").on(t.userId)],
 );
 
 /* ----------------------------------------------------------------- platform admin */

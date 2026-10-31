@@ -106,7 +106,8 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
 
   return (
     <article
-      className={`rounded-2xl border-2 border-navy-900 bg-white p-4 ${
+      id={`booking-${b.id}`}
+      className={`scroll-mt-32 rounded-2xl border-2 border-navy-900 bg-white p-4 target:ring-4 target:ring-accent-500 ${
         status === "pending" ? "ring-2 ring-accent-400" : cancelledByCustomer ? "ring-2 ring-red-400" : ""
       }`}
     >
