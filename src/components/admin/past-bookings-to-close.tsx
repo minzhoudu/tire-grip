@@ -7,6 +7,8 @@ import { InlineSpinner } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { formatPhone, whatsappLink } from "@/lib/phone";
+import { SupportDeleteButton } from "./support-delete-button";
+import { useSupportMode } from "./support-mode";
 
 export interface PastBookingItem {
   id: string;
@@ -27,7 +29,8 @@ export interface PastBookingItem {
   customerUrl: string | null;
 }
 
-type Outcome = "completed" | "no_show";
+/** "deleted" = removed from the database in a support session */
+type Outcome = "completed" | "no_show" | "deleted";
 
 /**
  * Confirmed bookings that are over, waiting for "Završeno" or "Nije došao". Mark the no-shows,
@@ -147,8 +150,12 @@ export function PastBookingsToClose({ slug, items, autoDays }: { slug: string; i
                   </span>
                 </button>
                 {outcome ? (
-                  <span className={`text-sm font-semibold sm:shrink-0 ${outcome === "no_show" ? "text-red-700" : "text-emerald-700"}`}>
-                    {outcome === "no_show" ? "Nije došao" : "Završeno ✓"}
+                  <span
+                    className={`text-sm font-semibold sm:shrink-0 ${
+                      outcome === "no_show" ? "text-red-700" : outcome === "deleted" ? "text-slate-500" : "text-emerald-700"
+                    }`}
+                  >
+                    {outcome === "no_show" ? "Nije došao" : outcome === "deleted" ? "🗑️ Obrisano" : "Završeno ✓"}
                   </span>
                 ) : (
                   <span className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
@@ -172,7 +179,13 @@ export function PastBookingsToClose({ slug, items, autoDays }: { slug: string; i
                   </span>
                 )}
               </div>
-              {isOpen && <PastBookingDetails item={it} />}
+              {isOpen && outcome !== "deleted" && (
+                <PastBookingDetails
+                  slug={slug}
+                  item={it}
+                  onDeleted={() => setClosed((m) => new Map(m).set(it.id, "deleted"))}
+                />
+              )}
             </li>
           );
         })}
@@ -204,7 +217,8 @@ export function PastBookingsToClose({ slug, items, autoDays }: { slug: string; i
 }
 
 /** Opened row: how to reach the customer and what they booked, for deciding "Završeno" vs "Nije došao". */
-function PastBookingDetails({ item: it }: { item: PastBookingItem }) {
+function PastBookingDetails({ slug, item: it, onDeleted }: { slug: string; item: PastBookingItem; onDeleted: () => void }) {
+  const supportMode = useSupportMode();
   return (
     <div className="flex flex-col gap-2 border-t border-slate-100 px-3 pt-2.5 pb-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -230,6 +244,7 @@ function PastBookingDetails({ item: it }: { item: PastBookingItem }) {
           Profil kupca ›
         </Link>
       )}
+      {supportMode && <SupportDeleteButton slug={slug} bookingId={it.id} onDeleted={onDeleted} />}
     </div>
   );
 }
