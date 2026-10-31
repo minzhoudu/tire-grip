@@ -11,6 +11,7 @@ import { TomorrowReminders, type ReminderItem } from "@/components/admin/tomorro
 import { PendingArea, PendingNavProvider } from "@/components/ui/pending-nav";
 import { addDays, dayChipLabel, dayLongLabel, shopToday, utcToZoned } from "@/lib/availability";
 import { formatMinutes } from "@/lib/availability/zoned";
+import { hasFeature } from "@/lib/plan";
 import {
   AUTO_COMPLETE_AFTER_DAYS,
   autoCompleteStale,
@@ -42,7 +43,13 @@ export default async function RequestsPage({ params, searchParams }: Props) {
     view === "upcoming" ? listBookingsToClose(db, shop.id, now) : Promise.resolve([]),
     view === "history" ? historyPage(shop) : Promise.resolve(null),
   ]);
+  const [origin, base, checklist] = await Promise.all([
+    getOrigin(),
+    getAdminBase(slug),
+    role === "owner" ? getSetupChecklist(getDb(), shop.id) : Promise.resolve(null),
+  ]);
   const yesterday = addDays(today, -1);
+  const showCustomerLink = hasFeature(shop.plan, "kupci");
   const pastItems: PastBookingItem[] = toClose.map((b) => {
     const start = utcToZoned(b.startsAt, shop.timezone);
     return {
@@ -52,13 +59,14 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       customerName: b.customerName,
       serviceName: `${b.serviceIcon ?? ""} ${b.serviceName}`.trim(),
       bay: shop.bays > 1 ? b.bay : null,
+      customerPhone: b.customerPhone,
+      vehicle: [`${b.vehicleTypeIcon ?? ""} ${b.vehicleTypeLabel}`.trim(), b.vehicleLabel].filter(Boolean).join(" · "),
+      priceRsd: b.priceRsd,
+      customerNote: b.customerNote,
+      customerNoShows: b.customerNoShows,
+      customerUrl: showCustomerLink ? `${base}/kupci/${b.customerId}` : null,
     };
   });
-  const [origin, base, checklist] = await Promise.all([
-    getOrigin(),
-    getAdminBase(slug),
-    role === "owner" ? getSetupChecklist(getDb(), shop.id) : Promise.resolve(null),
-  ]);
 
   // Group by local day, keeping the query's order.
   const tomorrow = addDays(today, 1);

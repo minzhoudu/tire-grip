@@ -32,6 +32,7 @@ export interface AdminBooking {
   vehicleTypeIcon: string | null;
   serviceName: string;
   serviceIcon: string | null;
+  customerId: string;
   customerName: string;
   customerPhone: string;
   vehicleLabel: string | null;
@@ -57,6 +58,7 @@ const bookingColumns = {
   vehicleTypeIcon: vehicleTypes.icon,
   serviceName: services.name,
   serviceIcon: services.icon,
+  customerId: bookings.customerId,
   customerName: customers.name,
   customerPhone: customers.phone,
   vehicleLabel: vehicles.label,
