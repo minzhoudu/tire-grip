@@ -15,6 +15,7 @@ import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatu
 import {
   adminDaySlots,
   changeBookingStatus,
+  deleteBookingForSupport,
   completeBookings,
   createBlock,
   customerMessageUrl,
@@ -28,7 +29,7 @@ import { getAuth } from "@/server/auth";
 import { createBookingRequest } from "@/server/bookings";
 import { getOrigin, platformUrl, rootLoginUrl } from "@/server/origin";
 import { endImpersonation, IMPERSONATION_COOKIE, logPlatformAction } from "@/server/platform";
-import { requireShopAccess, requireUser } from "@/server/session";
+import { isPlatformAdminEmail, requireShopAccess, requireUser } from "@/server/session";
 import { loadShopContext } from "@/server/shops";
 import { searchShopCustomers, type ShopCustomerRow } from "@/server/customers";
 import { hasFeature } from "@/lib/plan";
@@ -208,6 +209,24 @@ export async function deleteBlockAction(raw: { slug: string; blockId: string }):
   if (!input.success) return { ok: false };
   const { shop } = await requireShopAccess(input.data.slug);
   return { ok: await deleteBlock(getDb(), shop.id, input.data.blockId) };
+}
+
+/* ------------------------------------------------------------------ support: hard delete */
+
+const deleteBookingInput = z.object({ slug: slugSchema, bookingId: z.uuid() });
+
+/** Only in a platform-admin "Uđi kao" session — shop owners and staff can cancel, never delete. Logged in platform_audit_log. */
+export async function deleteBookingAction(raw: z.input<typeof deleteBookingInput>): Promise<{ ok: true } | { ok: false; reason: "not_found" | "not_allowed" | "invalid" }> {
+  const input = deleteBookingInput.safeParse(raw);
+  if (!input.success) return { ok: false, reason: "invalid" };
+  const { shop, user, isImpersonating } = await requireShopAccess(input.data.slug);
+  if (!isImpersonating || !isPlatformAdminEmail(user.email)) return { ok: false, reason: "not_allowed" };
+
+  const db = getDb();
+  const deleted = await deleteBookingForSupport(db, shop, input.data.bookingId);
+  if (!deleted) return { ok: false, reason: "not_found" };
+  await logPlatformAction(db, { adminUserId: user.id, shopId: shop.id, action: "booking_deleted", details: deleted });
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------------ session */

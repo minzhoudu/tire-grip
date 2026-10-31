@@ -87,7 +87,7 @@ export async function requireOwnerAccess(slug: string): Promise<ShopAccess> {
  * comma-separated) rather than a DB flag — deploy-time config nobody can
  * escalate into through an app bug.
  */
-function isPlatformAdminEmail(email: string): boolean {
+export function isPlatformAdminEmail(email: string): boolean {
   const list = (process.env.PLATFORM_ADMIN_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())

@@ -1,9 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { changeStatusAction, completeBookingsAction } from "@/app/admin/[slug]/actions";
 import { InlineSpinner } from "@/components/ui/busy";
 import { useToast } from "@/components/ui/toast";
+import { formatRsd } from "@/lib/availability/labels";
+import { formatPhone, whatsappLink } from "@/lib/phone";
+import { SupportDeleteButton } from "./support-delete-button";
+import { useSupportMode } from "./support-mode";
 
 export interface PastBookingItem {
   id: string;
@@ -13,9 +18,19 @@ export interface PastBookingItem {
   customerName: string;
   serviceName: string;
   bay: number | null;
+  /* shown when the row is opened */
+  customerPhone: string;
+  /** "🚗 Putničko · Golf 7" */
+  vehicle: string;
+  priceRsd: number;
+  customerNote: string | null;
+  customerNoShows: number;
+  /** Customer's page in Kupci, or null when the plan doesn't include it */
+  customerUrl: string | null;
 }
 
-type Outcome = "completed" | "no_show";
+/** "deleted" = removed from the database in a support session */
+type Outcome = "completed" | "no_show" | "deleted";
 
 /**
  * Confirmed bookings that are over, waiting for "Završeno" or "Nije došao". Mark the no-shows,
@@ -26,7 +41,16 @@ export function PastBookingsToClose({ slug, items, autoDays }: { slug: string; i
   const [closed, setClosed] = useState<Map<string, Outcome>>(new Map());
   const [busy, setBusy] = useState<{ id: string; action: "complete" | "noShow" } | "all" | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+
+  function toggle(id: string) {
+    setExpanded((s) => {
+      const next = new Set(s);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
 
   const open = items.filter((i) => !closed.has(i.id));
   if (items.length === 0) return null;
@@ -99,43 +123,68 @@ export function PastBookingsToClose({ slug, items, autoDays }: { slug: string; i
         {items.map((it) => {
           const outcome = closed.get(it.id);
           const rowBusy = pending && ((busy !== "all" && busy?.id === it.id) || (busy === "all" && !outcome));
+          const isOpen = expanded.has(it.id);
           return (
-            <li key={it.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-white px-3 py-2.5">
-              <span className="w-16 shrink-0 leading-tight">
-                <span className="block text-xs text-slate-500">{it.dayLabel}</span>
-                <span className="block font-mono text-sm font-bold">{it.time}</span>
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold">{it.customerName}</span>
-                <span className="block truncate text-xs text-slate-500">
-                  {it.serviceName}
-                  {it.bay !== null && ` · boks ${it.bay}`}
-                </span>
-              </span>
-              {outcome ? (
-                <span className={`shrink-0 text-sm font-semibold ${outcome === "no_show" ? "text-red-700" : "text-emerald-700"}`}>
-                  {outcome === "no_show" ? "Nije došao" : "Završeno ✓"}
-                </span>
-              ) : (
-                <span className="flex shrink-0 gap-2">
-                  {(["noShow", "complete"] as const).map((action) => {
-                    const spinning = rowBusy && (busy === "all" ? action === "complete" : busy?.action === action);
-                    return (
-                      <button
-                        key={action}
-                        type="button"
-                        disabled={pending}
-                        onClick={() => closeOne(it.id, action)}
-                        className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold active:scale-[0.98] ${
-                          spinning ? "" : "disabled:opacity-50"
-                        } ${action === "complete" ? "bg-emerald-600 text-white" : "border border-slate-300 bg-white text-slate-700"}`}
-                      >
-                        {spinning && <InlineSpinner />}
-                        {action === "complete" ? "Završeno" : "Nije došao"}
-                      </button>
-                    );
-                  })}
-                </span>
+            <li key={it.id} className="rounded-xl bg-white">
+              {/* Phones: actions get their own row under the name, so the name and service stay readable. */}
+              <div className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => toggle(it.id)}
+                  aria-expanded={isOpen}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <span className="w-16 shrink-0 leading-tight">
+                    <span className="block text-xs text-slate-500">{it.dayLabel}</span>
+                    <span className="block font-mono text-sm font-bold">{it.time}</span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block font-semibold ${isOpen ? "" : "truncate"}`}>{it.customerName}</span>
+                    <span className={`block text-xs text-slate-500 ${isOpen ? "" : "truncate"}`}>
+                      {it.serviceName}
+                      {it.bay !== null && ` · boks ${it.bay}`}
+                    </span>
+                  </span>
+                  <span aria-hidden className={`shrink-0 text-xl text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>
+                    ›
+                  </span>
+                </button>
+                {outcome ? (
+                  <span
+                    className={`text-sm font-semibold sm:shrink-0 ${
+                      outcome === "no_show" ? "text-red-700" : outcome === "deleted" ? "text-slate-500" : "text-emerald-700"
+                    }`}
+                  >
+                    {outcome === "no_show" ? "Nije došao" : outcome === "deleted" ? "🗑️ Obrisano" : "Završeno ✓"}
+                  </span>
+                ) : (
+                  <span className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                    {(["noShow", "complete"] as const).map((action) => {
+                      const spinning = rowBusy && (busy === "all" ? action === "complete" : busy?.action === action);
+                      return (
+                        <button
+                          key={action}
+                          type="button"
+                          disabled={pending}
+                          onClick={() => closeOne(it.id, action)}
+                          className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold active:scale-[0.98] ${
+                            spinning ? "" : "disabled:opacity-50"
+                          } ${action === "complete" ? "bg-emerald-600 text-white" : "border border-slate-300 bg-white text-slate-700"}`}
+                        >
+                          {spinning && <InlineSpinner />}
+                          {action === "complete" ? "Završeno" : "Nije došao"}
+                        </button>
+                      );
+                    })}
+                  </span>
+                )}
+              </div>
+              {isOpen && outcome !== "deleted" && (
+                <PastBookingDetails
+                  slug={slug}
+                  item={it}
+                  onDeleted={() => setClosed((m) => new Map(m).set(it.id, "deleted"))}
+                />
               )}
             </li>
           );
@@ -164,5 +213,38 @@ export function PastBookingsToClose({ slug, items, autoDays }: { slug: string; i
         </button>
       )}
     </section>
+  );
+}
+
+/** Opened row: how to reach the customer and what they booked, for deciding "Završeno" vs "Nije došao". */
+function PastBookingDetails({ slug, item: it, onDeleted }: { slug: string; item: PastBookingItem; onDeleted: () => void }) {
+  const supportMode = useSupportMode();
+  return (
+    <div className="flex flex-col gap-2 border-t border-slate-100 px-3 pt-2.5 pb-3 text-sm">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <a href={`tel:${it.customerPhone}`} className="font-medium text-navy-700">
+          📞 {formatPhone(it.customerPhone)}
+        </a>
+        <a href={whatsappLink(it.customerPhone, `Zdravo ${it.customerName}, `)} target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700">
+          WhatsApp
+        </a>
+      </div>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 text-slate-600">{it.vehicle}</span>
+        <span className="shrink-0 font-mono font-bold tabular-nums text-rust-600">{formatRsd(it.priceRsd)}</span>
+      </div>
+      {it.customerNoShows > 0 && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 font-medium text-red-800">
+          ⚠️ Ovaj kupac {it.customerNoShows === 1 ? "je već jednom propustio" : `je već ${it.customerNoShows} puta propustio`} termin.
+        </p>
+      )}
+      {it.customerNote && <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">📝 {it.customerNote}</p>}
+      {it.customerUrl && (
+        <Link href={it.customerUrl} className="self-start font-semibold text-navy-700">
+          Profil kupca ›
+        </Link>
+      )}
+      {supportMode && <SupportDeleteButton slug={slug} bookingId={it.id} onDeleted={onDeleted} />}
+    </div>
   );
 }

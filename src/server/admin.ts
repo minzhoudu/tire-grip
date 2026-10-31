@@ -32,6 +32,7 @@ export interface AdminBooking {
   vehicleTypeIcon: string | null;
   serviceName: string;
   serviceIcon: string | null;
+  customerId: string;
   customerName: string;
   customerPhone: string;
   vehicleLabel: string | null;
@@ -57,6 +58,7 @@ const bookingColumns = {
   vehicleTypeIcon: vehicleTypes.icon,
   serviceName: services.name,
   serviceIcon: services.icon,
+  customerId: bookings.customerId,
   customerName: customers.name,
   customerPhone: customers.phone,
   vehicleLabel: vehicles.label,
@@ -199,6 +201,24 @@ export async function getBooking(db: DB, shopId: string, bookingId: string): Pro
     .where(and(eq(bookings.shopId, shopId), eq(bookings.id, bookingId)))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Support only (platform admin in a "Uđi kao" session): removes a booking for good, e.g. test
+ * bookings that hold real slots. Unlike cancel, nothing is left in history or stats. A reminder
+ * that led to it just loses the link (booking_id → null). Returns a description for the audit
+ * log, or null if there's no such booking in this shop.
+ */
+export async function deleteBookingForSupport(db: DB, shop: { id: string; timezone: string }, bookingId: string): Promise<string | null> {
+  const b = await getBooking(db, shop.id, bookingId);
+  if (!b) return null;
+  const rows = await db
+    .delete(bookings)
+    .where(and(eq(bookings.shopId, shop.id), eq(bookings.id, bookingId)))
+    .returning({ id: bookings.id });
+  if (rows.length === 0) return null;
+  const start = utcToZoned(b.startsAt, shop.timezone);
+  return `${b.customerName} (${b.customerPhone}), ${b.serviceName}, ${start.date} ${formatMinutes(start.minutes)}, status: ${b.status}`;
 }
 
 /** Pending requests waiting for the shop (badge on the tab). */

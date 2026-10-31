@@ -5,6 +5,8 @@ import { useState, useTransition } from "react";
 import { changeStatusAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
 import { InlineSpinner } from "@/components/ui/busy";
 import { sendReminder, useSentReminders } from "./reminder-store";
+import { SupportDeleteButton } from "./support-delete-button";
+import { useSupportMode } from "./support-mode";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { ACTIONS, CUSTOMER_CANCEL_REASON, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
@@ -72,6 +74,8 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
   const [actions, setActions] = useState(b.actions);
   const [notifyUrl, setNotifyUrl] = useState(b.notifyUrl);
   const sentHere = useSentReminders();
+  const supportMode = useSupportMode();
+  const [deleted, setDeleted] = useState(false);
   const reminderDue = b.reminder && status === "confirmed" && !sentHere(b.id, b.reminder.sent);
 
   const isDestructive = (a: BookingAction) => a === "reject" || a === "cancel" || a === "noShow";
@@ -103,6 +107,10 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
 
   const chatUrl = whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `);
   const cancelledByCustomer = status === "cancelled" && b.cancelReason === CUSTOMER_CANCEL_REASON;
+
+  if (deleted) {
+    return <p className="rounded-2xl border-2 border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">🗑️ Termin je obrisan iz baze.</p>;
+  }
 
   return (
     <article
@@ -207,6 +215,8 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
           ))}
         </div>
       )}
+
+      {supportMode && <SupportDeleteButton slug={slug} bookingId={b.id} onDeleted={() => setDeleted(true)} />}
     </article>
   );
 }
