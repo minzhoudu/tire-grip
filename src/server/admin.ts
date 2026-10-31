@@ -4,6 +4,7 @@
  * from user input.
  */
 import { and, asc, desc, eq, gte, gt, inArray, isNull, lt, lte, not, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { DB } from "../db/index.ts";
 import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } from "../db/schema.ts";
 import { addDays, dayChipLabel, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
@@ -45,6 +46,9 @@ export interface AdminBooking {
   customerNoShows: number;
 }
 
+/** A subcategory's vehicle type, for "Kamion stočar · 2 sprata" and the parent's icon. */
+const parentVehicleTypes = alias(vehicleTypes, "parent_vehicle_types");
+
 const bookingColumns = {
   id: bookings.id,
   status: bookings.status,
@@ -54,8 +58,8 @@ const bookingColumns = {
   bay: bookings.bay,
   priceRsd: bookings.priceRsd,
   durationMin: bookings.durationMin,
-  vehicleTypeLabel: vehicleTypes.label,
-  vehicleTypeIcon: vehicleTypes.icon,
+  vehicleTypeLabel: sql<string>`case when ${parentVehicleTypes.label} is null then ${vehicleTypes.label} else ${parentVehicleTypes.label} || ' · ' || ${vehicleTypes.label} end`,
+  vehicleTypeIcon: sql<string | null>`coalesce(${vehicleTypes.icon}, ${parentVehicleTypes.icon})`,
   serviceName: services.name,
   serviceIcon: services.icon,
   customerId: bookings.customerId,
@@ -77,6 +81,7 @@ function bookingQuery(db: DB) {
     .innerJoin(services, and(eq(services.id, bookings.serviceId), eq(services.shopId, bookings.shopId)))
     .innerJoin(customers, and(eq(customers.id, bookings.customerId), eq(customers.shopId, bookings.shopId)))
     .innerJoin(vehicleTypes, and(eq(vehicleTypes.id, bookings.vehicleTypeId), eq(vehicleTypes.shopId, bookings.shopId)))
+    .leftJoin(parentVehicleTypes, and(eq(parentVehicleTypes.id, vehicleTypes.parentId), eq(parentVehicleTypes.shopId, vehicleTypes.shopId)))
     .leftJoin(vehicles, and(eq(vehicles.id, bookings.vehicleId), eq(vehicles.shopId, bookings.shopId)));
 }
 

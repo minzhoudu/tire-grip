@@ -16,6 +16,7 @@ import { requireOwnerAccess } from "@/server/session";
 import {
   addClosedDays,
   createService,
+  createVehicleSubcategory,
   createVehicleType,
   deleteException,
   deleteService,
@@ -292,7 +293,7 @@ const vehicleTypeInput = z.object({
   icon: z.string().trim().max(8).optional().default(""),
 });
 
-export type VehicleTypeResult = { ok: true } | { ok: false; error: string };
+export type VehicleTypeResult = { ok: true; movedPrices?: number } | { ok: false; error: string };
 
 function toVehicleTypeInput(data: z.output<typeof vehicleTypeInput>): VehicleTypeInput {
   return { label: data.label, icon: data.icon || null };
@@ -304,6 +305,18 @@ export async function createVehicleTypeAction(raw: z.input<typeof vehicleTypeInp
   const { shop } = await requireOwnerAccess(input.data.slug);
   await createVehicleType(getDb(), shop.id, toVehicleTypeInput(input.data));
   return { ok: true };
+}
+
+const subcategoryInput = z.object({ slug: slugSchema, parentId: z.uuid(), label: z.string().trim().min(1, "Unesite naziv").max(60) });
+
+/** Adds a subcategory (e.g. "2 sprata" under "Kamion stočar"). */
+export async function createVehicleSubcategoryAction(raw: z.input<typeof subcategoryInput>): Promise<VehicleTypeResult> {
+  const input = subcategoryInput.safeParse(raw);
+  if (!input.success) return { ok: false, error: input.error.issues[0]?.message ?? "Proverite unete podatke." };
+  const { shop } = await requireOwnerAccess(input.data.slug);
+  const r = await createVehicleSubcategory(getDb(), shop.id, input.data.parentId, input.data.label);
+  if (!r.ok) return { ok: false, error: "Vrsta vozila nije pronađena." };
+  return { ok: true, movedPrices: r.movedPrices };
 }
 
 export async function updateVehicleTypeAction(raw: z.input<typeof vehicleTypeInput> & { vehicleTypeId: string }): Promise<VehicleTypeResult> {

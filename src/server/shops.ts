@@ -24,17 +24,15 @@ import type {
   WeeklyHours,
 } from "../lib/availability/index.ts";
 import { resolveOffer } from "../lib/availability/index.ts";
+import { bookableVehicleTypeIds, buildVehicleCatalog, type CatalogVehicleType } from "../lib/vehicle-types.ts";
 
 type Q = DB | Tx;
 
 /** Statuses that occupy a bay (mirrors the bookings_no_overlap constraint). */
 export const ACTIVE_STATUSES = ["pending", "confirmed", "completed"] as const;
 
-export interface PublicVehicleType {
-  id: string;
-  label: string;
-  icon: string | null;
-}
+/** label is the full name ("Kamion stočar · 2 sprata"); parentId/name/isGroup let the chat and price list group subcategories. */
+export type PublicVehicleType = CatalogVehicleType;
 
 export interface PublicService {
   id: string;
@@ -51,7 +49,7 @@ export interface ShopContext {
   shop: Shop;
   settings: ShopSettings;
   services: PublicService[];
-  /** Active vehicle types, ordered — the shop's own list, not a fixed set. */
+  /** Active vehicle types, ordered (each type followed by its subcategories) — the shop's own list, not a fixed set. */
   vehicleTypes: PublicVehicleType[];
   weeklyHours: WeeklyHours[];
   exceptions: DateException[];
@@ -73,11 +71,8 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
       .where(and(eq(services.shopId, shop.id), eq(services.isActive, true)))
       .orderBy(asc(services.sortOrder), asc(services.name)),
     db.select().from(servicePrices).where(eq(servicePrices.shopId, shop.id)),
-    db
-      .select()
-      .from(vehicleTypes)
-      .where(and(eq(vehicleTypes.shopId, shop.id), eq(vehicleTypes.isActive, true)))
-      .orderBy(asc(vehicleTypes.sortOrder)),
+    // All of them (inactive too): a type is a group if it has any subcategory, active or not.
+    db.select().from(vehicleTypes).where(eq(vehicleTypes.shopId, shop.id)),
     db.select().from(workingHours).where(eq(workingHours.shopId, shop.id)),
     db
       .select()
@@ -85,7 +80,9 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
       .where(and(eq(scheduleExceptions.shopId, shop.id), gte(scheduleExceptions.date, sql`current_date - 1`))),
   ]);
 
-  const activeVehicleTypeIds = new Set(vehicleTypeRows.map((vt) => vt.id));
+  const catalog = buildVehicleCatalog(vehicleTypeRows);
+  const bookableIds = bookableVehicleTypeIds(catalog);
+  const vehicleOrder = new Map(catalog.map((vt, i) => [vt.id, i]));
   const publicServices: PublicService[] = serviceRows.map((s) => ({
     id: s.id,
     kind: s.kind,
@@ -95,7 +92,8 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
     bookable: s.bookable,
     durationMin: s.durationMin,
     prices: priceRows
-      .filter((p) => p.serviceId === s.id && activeVehicleTypeIds.has(p.vehicleTypeId))
+      .filter((p) => p.serviceId === s.id && bookableIds.has(p.vehicleTypeId))
+      .sort((a, b) => vehicleOrder.get(a.vehicleTypeId)! - vehicleOrder.get(b.vehicleTypeId)!)
       .map((p) => ({ vehicleTypeId: p.vehicleTypeId, priceRsd: p.priceRsd, durationMin: p.durationMin })),
   }));
 
@@ -109,7 +107,7 @@ export async function loadShopContext(db: Q, slug: string): Promise<ShopContext 
       minNoticeMin: shop.minNoticeMin,
     },
     services: publicServices,
-    vehicleTypes: vehicleTypeRows.map((vt) => ({ id: vt.id, label: vt.label, icon: vt.icon })),
+    vehicleTypes: catalog,
     weeklyHours: hourRows.map((h) => ({ weekday: h.weekday, opensAt: h.opensAt, closesAt: h.closesAt })),
     exceptions: exceptionRows.map((e) => ({ date: e.date, closed: e.closed, opensAt: e.opensAt, closesAt: e.closesAt })),
   };

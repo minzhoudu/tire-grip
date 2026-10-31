@@ -263,7 +263,13 @@ export const services = pgTable(
   ],
 );
 
-/** A kind of vehicle a shop services (car, SUV, van, or anything a shop adds — bicycle, motorcycle…). */
+/**
+ * A kind of vehicle a shop services (car, SUV, van, or anything a shop adds — bicycle, motorcycle…).
+ *
+ * Optional subcategories, one level deep, for when the price depends on more than the kind
+ * (e.g. "Kamion stočar" → "1 sprat", "2 sprata"): a subcategory is a row with parent_id set.
+ * A type that has subcategories is only a group — prices and bookings point at its subcategories.
+ */
 export const vehicleTypes = pgTable(
   "vehicle_types",
   {
@@ -271,8 +277,10 @@ export const vehicleTypes = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
+    /** Set on a subcategory: the vehicle type it belongs to (always a top-level one). */
+    parentId: uuid("parent_id"),
     label: text("label").notNull(),
-    /** Emoji shown next to the label, e.g. 🚗 */
+    /** Emoji shown next to the label, e.g. 🚗. Subcategories show their parent's. */
     icon: text("icon"),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: smallint("sort_order").notNull().default(0),
@@ -282,6 +290,12 @@ export const vehicleTypes = pgTable(
   (t) => [
     unique("vehicle_types_shop_id_uq").on(t.shopId, t.id), // target for composite FKs
     index("vehicle_types_shop_idx").on(t.shopId, t.sortOrder),
+    foreignKey({
+      name: "vehicle_types_parent_fk",
+      columns: [t.shopId, t.parentId],
+      foreignColumns: [t.shopId, t.id],
+    }).onDelete("cascade"),
+    check("vehicle_types_not_own_parent", sql`${t.parentId} is null or ${t.parentId} <> ${t.id}`),
   ],
 );
 

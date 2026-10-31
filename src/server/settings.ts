@@ -3,7 +3,7 @@
  * booking rules, weekly hours, date exceptions and services/prices.
  * Every function takes the shopId explicitly and scopes every query by it.
  */
-import { and, asc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { cache } from "react";
 import type { DB } from "../db/index.ts";
 import {
@@ -316,8 +316,25 @@ export interface ServiceInput {
   prices: ServicePriceRow[];
 }
 
+/** Vehicle types that have subcategories: only groups, never priced or booked themselves. */
+async function groupVehicleTypeIds(db: Pick<DB, "selectDistinct">, shopId: string): Promise<Set<string>> {
+  const rows = await db
+    .selectDistinct({ id: vehicleTypes.parentId })
+    .from(vehicleTypes)
+    .where(and(eq(vehicleTypes.shopId, shopId), isNotNull(vehicleTypes.parentId)));
+  return new Set(rows.map((r) => r.id!));
+}
+
+/** Prices for a group type would never be shown or bookable, so they're dropped instead of stored. */
+async function priceableRows(db: Pick<DB, "selectDistinct">, shopId: string, prices: ServicePriceRow[]): Promise<ServicePriceRow[]> {
+  if (prices.length === 0) return prices;
+  const groups = await groupVehicleTypeIds(db, shopId);
+  return prices.filter((p) => !groups.has(p.vehicleTypeId));
+}
+
 export async function createService(db: DB, shopId: string, input: ServiceInput): Promise<string> {
   return db.transaction(async (tx) => {
+    input = { ...input, prices: await priceableRows(tx, shopId, input.prices) };
     const [maxRow] = await tx.select({ max: sql<number>`coalesce(max(${services.sortOrder}), 0)` }).from(services).where(eq(services.shopId, shopId));
     const [row] = await tx
       .insert(services)
@@ -342,6 +359,7 @@ export async function createService(db: DB, shopId: string, input: ServiceInput)
 
 export async function updateService(db: DB, shopId: string, serviceId: string, input: ServiceInput): Promise<boolean> {
   return db.transaction(async (tx) => {
+    input = { ...input, prices: await priceableRows(tx, shopId, input.prices) };
     const updated = await tx
       .update(services)
       .set({
@@ -408,32 +426,37 @@ export async function moveService(db: DB, shopId: string, serviceId: string, dir
 
 export interface VehicleTypeWithUsage {
   id: string;
+  /** Set on a subcategory: its top-level vehicle type */
+  parentId: string | null;
   label: string;
   icon: string | null;
   isActive: boolean;
   sortOrder: number;
+  /** Booked at least once (for a group: any of its subcategories) — can then only be switched off, not deleted. */
   hasBookings: boolean;
 }
 
-/** cache()-wrapped: see listWorkingHours. */
+/** Flat list in display order; a subcategory follows its siblings' order (sort_order), grouped by the caller via parentId. cache()-wrapped: see listWorkingHours. */
 export const listVehicleTypesForSettings = cache(async (db: DB, shopId: string): Promise<VehicleTypeWithUsage[]> => {
   const [rows, bookingCounts] = await Promise.all([
-    db.select().from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId)).orderBy(asc(vehicleTypes.sortOrder)),
+    db.select().from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId)).orderBy(asc(vehicleTypes.sortOrder), asc(vehicleTypes.createdAt)),
     db
       .select({ vehicleTypeId: bookings.vehicleTypeId, n: sql<number>`count(*)::int` })
       .from(bookings)
       .where(eq(bookings.shopId, shopId))
       .groupBy(bookings.vehicleTypeId),
   ]);
-  const bookingCountByType = new Map(bookingCounts.map((r) => [r.vehicleTypeId, r.n]));
+  const booked = new Set(bookingCounts.filter((r) => r.n > 0).map((r) => r.vehicleTypeId));
+  for (const vt of rows) if (vt.parentId && booked.has(vt.id)) booked.add(vt.parentId);
 
   return rows.map((vt) => ({
     id: vt.id,
+    parentId: vt.parentId,
     label: vt.label,
     icon: vt.icon,
     isActive: vt.isActive,
     sortOrder: vt.sortOrder,
-    hasBookings: (bookingCountByType.get(vt.id) ?? 0) > 0,
+    hasBookings: booked.has(vt.id),
   }));
 });
 
@@ -453,10 +476,57 @@ export async function createVehicleType(db: DB, shopId: string, input: VehicleTy
   });
 }
 
+export type CreateSubcategoryResult =
+  | {
+      ok: true;
+      id: string;
+      /** First subcategory of a type: the type's prices moved over to it, so its services stay bookable. */
+      movedPrices: number;
+    }
+  | { ok: false; reason: "parent_not_found" };
+
+/**
+ * A subcategory of a top-level vehicle type (e.g. "2 sprata" under "Kamion stočar"): one level
+ * deep, no icon of its own. The first one takes over the parent's prices — the parent stops being
+ * bookable on its own, and this way the shop doesn't silently lose those services.
+ */
+export async function createVehicleSubcategory(db: DB, shopId: string, parentId: string, label: string): Promise<CreateSubcategoryResult> {
+  return db.transaction(async (tx) => {
+    const [parent] = await tx
+      .select({ id: vehicleTypes.id })
+      .from(vehicleTypes)
+      .where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.id, parentId), isNull(vehicleTypes.parentId)))
+      .for("update");
+    if (!parent) return { ok: false as const, reason: "parent_not_found" as const };
+    const [sibling] = await tx
+      .select({ id: vehicleTypes.id })
+      .from(vehicleTypes)
+      .where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.parentId, parentId)))
+      .limit(1);
+    const [maxRow] = await tx.select({ max: sql<number>`coalesce(max(${vehicleTypes.sortOrder}), 0)` }).from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId));
+    const [row] = await tx
+      .insert(vehicleTypes)
+      .values({ shopId, parentId, label, icon: null, sortOrder: (maxRow?.max ?? 0) + 1 })
+      .returning({ id: vehicleTypes.id });
+    const id = row!.id;
+    let movedPrices = 0;
+    if (!sibling) {
+      const moved = await tx
+        .update(servicePrices)
+        .set({ vehicleTypeId: id })
+        .where(and(eq(servicePrices.shopId, shopId), eq(servicePrices.vehicleTypeId, parentId)))
+        .returning({ id: servicePrices.id });
+      movedPrices = moved.length;
+    }
+    return { ok: true as const, id, movedPrices };
+  });
+}
+
+/** Subcategories never get an icon (they show the parent's). */
 export async function updateVehicleType(db: DB, shopId: string, vehicleTypeId: string, input: VehicleTypeInput): Promise<boolean> {
   const updated = await db
     .update(vehicleTypes)
-    .set({ label: input.label, icon: input.icon })
+    .set({ label: input.label, icon: sql`case when ${vehicleTypes.parentId} is null then ${input.icon}::text else null end` })
     .where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.id, vehicleTypeId)))
     .returning({ id: vehicleTypes.id });
   return updated.length > 0;
@@ -473,20 +543,37 @@ export async function setVehicleTypeActive(db: DB, shopId: string, vehicleTypeId
 
 export type DeleteVehicleTypeResult = { ok: true } | { ok: false; reason: "has_bookings" | "not_found" };
 
-/** A vehicle type that was ever booked can't be deleted (the booking FK would be orphaned) — deactivate it instead. */
+/**
+ * A vehicle type that was ever booked can't be deleted (the booking FK would be orphaned) — deactivate it instead.
+ * Deleting a type deletes its subcategories too, so their bookings count as well.
+ */
 export async function deleteVehicleType(db: DB, shopId: string, vehicleTypeId: string): Promise<DeleteVehicleTypeResult> {
+  const children = await db
+    .select({ id: vehicleTypes.id })
+    .from(vehicleTypes)
+    .where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.parentId, vehicleTypeId)));
+  const ids = [vehicleTypeId, ...children.map((c) => c.id)];
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(bookings)
-    .where(and(eq(bookings.shopId, shopId), eq(bookings.vehicleTypeId, vehicleTypeId)));
+    .where(and(eq(bookings.shopId, shopId), inArray(bookings.vehicleTypeId, ids)));
   if ((row?.n ?? 0) > 0) return { ok: false, reason: "has_bookings" };
   const deleted = await db.delete(vehicleTypes).where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.id, vehicleTypeId))).returning({ id: vehicleTypes.id });
   return deleted.length > 0 ? { ok: true } : { ok: false, reason: "not_found" };
 }
 
-/** Swaps sort_order with the previous/next vehicle type, for simple reordering (no drag-and-drop). */
+/** Swaps sort_order with the previous/next sibling (top-level types among themselves, subcategories within their type). */
 export async function moveVehicleType(db: DB, shopId: string, vehicleTypeId: string, direction: "up" | "down"): Promise<void> {
-  const rows = await db.select({ id: vehicleTypes.id, sortOrder: vehicleTypes.sortOrder }).from(vehicleTypes).where(eq(vehicleTypes.shopId, shopId)).orderBy(asc(vehicleTypes.sortOrder));
+  const [target] = await db
+    .select({ parentId: vehicleTypes.parentId })
+    .from(vehicleTypes)
+    .where(and(eq(vehicleTypes.shopId, shopId), eq(vehicleTypes.id, vehicleTypeId)));
+  if (!target) return;
+  const rows = await db
+    .select({ id: vehicleTypes.id, sortOrder: vehicleTypes.sortOrder })
+    .from(vehicleTypes)
+    .where(and(eq(vehicleTypes.shopId, shopId), target.parentId ? eq(vehicleTypes.parentId, target.parentId) : isNull(vehicleTypes.parentId)))
+    .orderBy(asc(vehicleTypes.sortOrder), asc(vehicleTypes.createdAt));
   const idx = rows.findIndex((r) => r.id === vehicleTypeId);
   if (idx === -1) return;
   const swapIdx = direction === "up" ? idx - 1 : idx + 1;
@@ -520,7 +607,9 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
   ]);
   const openDays = new Set(weeklyHours.map((h) => h.weekday)).size;
   const activeServices = services.filter((s) => s.isActive).length;
-  const activeVehicleTypes = vehicleTypesList.filter((vt) => vt.isActive).length;
+  // Count vehicle types, not their subcategories.
+  const topVehicleTypes = vehicleTypesList.filter((vt) => vt.parentId === null);
+  const activeVehicleTypes = topVehicleTypes.filter((vt) => vt.isActive).length;
   const base = `${adminBase}/podesavanja`;
 
   return [
@@ -566,7 +655,7 @@ export async function listSettingsSections(db: DB, shop: Shop, adminBase: string
       href: `${base}/vrste-vozila`,
       icon: "🚗",
       title: "Vrste vozila",
-      subtitle: activeVehicleTypes === 0 ? "Nije podešeno, podesite pre Usluga i cena" : `${activeVehicleTypes}/${vehicleTypesList.length} aktivno`,
+      subtitle: activeVehicleTypes === 0 ? "Nije podešeno, podesite pre Usluga i cena" : `${activeVehicleTypes}/${topVehicleTypes.length} aktivno`,
       incomplete: activeVehicleTypes === 0,
     },
   ];
