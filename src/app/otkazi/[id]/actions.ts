@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { getDb } from "@/db";
 import { cancelBookingByCustomer } from "@/server/cancel";
+import { notifyShopAfterResponse } from "@/server/notify-later";
 
 const input = z.object({ id: z.uuid() });
 
@@ -14,7 +15,10 @@ export async function cancelBookingAction(raw: z.input<typeof input>): Promise<C
   if (!parsed.success) return { ok: false, error: "Neispravan zahtev." };
 
   const result = await cancelBookingByCustomer(getDb(), parsed.data.id);
-  if (result.ok) return { ok: true };
+  if (result.ok) {
+    await notifyShopAfterResponse({ kind: "customer_cancelled", bookingId: parsed.data.id });
+    return { ok: true };
+  }
   return {
     ok: false,
     error: result.reason === "not_found" ? "Termin nije pronađen." : "Ovaj termin više ne može da se otkaže ovde. Kontaktirajte radnju.",

@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { ShopSwitcher } from "@/components/admin/shop-switcher";
+import { PwaSetup } from "@/components/admin/push/pwa-setup";
 import { ToastProvider } from "@/components/ui/toast";
 import { listUserShops } from "@/server/accounts";
 import { countPending } from "@/server/admin";
@@ -11,7 +12,18 @@ import { addShopUrl, getOrigin, shopAdminUrl, shopPublicUrl } from "@/server/ori
 import { getAdminBase, requireShopAccess } from "@/server/session";
 import { endImpersonationAction, signOutAction } from "./actions";
 
-export const metadata: Metadata = { title: "Panel | Moj Vulkanizer", robots: { index: false } };
+/** Also makes the panel installable ("Dodaj na početni ekran") as the shop's own app, which iPhone needs for push. */
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const base = await getAdminBase(slug);
+  return {
+    title: "Panel | Moj Vulkanizer",
+    robots: { index: false },
+    manifest: `${base}/app.webmanifest`,
+    appleWebApp: { capable: true, statusBarStyle: "black-translucent" }, // home-screen name comes from the manifest
+    icons: { apple: "/icons/apple-touch-icon.png" },
+  };
+}
 
 export default async function AdminShopLayout({
   children,
@@ -37,6 +49,7 @@ export default async function AdminShopLayout({
 
   return (
     <ToastProvider>
+      <PwaSetup slug={slug} pending={pending} syncSubscription={!isImpersonating} />
       <div className="flex min-h-dvh bg-slate-100 md:items-stretch">
         {/* Desktop sidebar, always exactly one screen tall (sticky); mobile keeps the sticky top header + tabs below instead. */}
         <aside className="hidden print:hidden! md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col md:self-start md:bg-navy-900 md:text-white">

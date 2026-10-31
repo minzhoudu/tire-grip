@@ -21,6 +21,7 @@ import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/l
 import { formatPhone, normalizePhone, whatsappLink } from "@/lib/phone";
 import { createBookingRequest } from "@/server/bookings";
 import { findBookingsByPhone, getShopBasics } from "@/server/customers";
+import { notifyShopAfterResponse } from "@/server/notify-later";
 import { getOrigin } from "@/server/origin";
 import { linkBookingToReminder } from "@/server/reminders";
 import { findOffer, loadBusy, loadShopContext } from "@/server/shops";
@@ -146,6 +147,7 @@ export async function submitBookingAction(raw: BookingRequestInput & { reminderT
     const result = await createBookingRequest(getDb(), req, { source: reminderToken ? "reminder" : "web" });
     if (!result.ok) return { ok: false, reason: result.reason };
     if (reminderToken) await linkBookingToReminder(getDb(), { shopId: result.shop.id, token: reminderToken, bookingId: result.booking.id });
+    await notifyShopAfterResponse({ kind: "new_booking", bookingId: result.booking.id });
 
     const { booking, shop } = result;
     const dayLabel = dayLongLabel(booking.date);

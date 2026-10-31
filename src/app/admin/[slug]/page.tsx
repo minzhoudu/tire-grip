@@ -1,6 +1,7 @@
 import { getDb } from "@/db";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { BookingCard, type BookingCardData } from "@/components/admin/booking-card";
+import { EnablePushPrompt } from "@/components/admin/push/enable-push-prompt";
 import { HistoryList } from "@/components/admin/history-list";
 import { PastBookingsToClose, type PastBookingItem } from "@/components/admin/past-bookings-to-close";
 import { historyPage } from "@/server/history";
@@ -30,7 +31,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const { view: rawView } = await searchParams;
   const view: AdminView = rawView === "history" ? "history" : "upcoming";
-  const { shop, role } = await requireShopAccess(slug);
+  const { shop, role, isImpersonating } = await requireShopAccess(slug);
 
   const now = new Date();
   const today = shopToday(shop, now);
@@ -94,6 +95,8 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       {view === "upcoming" && <AutoRefresh seconds={30} />}
 
       {view === "upcoming" && checklist && <SetupChecklistCard checklist={checklist} base={base} />}
+
+      {view === "upcoming" && !isImpersonating && <EnablePushPrompt href={`${base}/obavestenja`} />}
 
       {pastItems.length > 0 && <PastBookingsToClose slug={slug} items={pastItems} autoDays={AUTO_COMPLETE_AFTER_DAYS} />}
 

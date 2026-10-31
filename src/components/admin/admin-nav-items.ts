@@ -17,6 +17,7 @@ export function getAdminNavItems(base: string, pending: number, isOwner: boolean
     ...(hasFeature(plan, "kupci") ? [{ href: `${base}/kupci`, label: "Kupci" }] : []),
     ...(isOwner && hasFeature(plan, "statistika") ? [{ href: `${base}/statistika`, label: "Statistika" }] : []),
     ...(isOwner && hasFeature(plan, "podsetnici") ? [{ href: `${base}/podsetnici`, label: "Podsetnici" }] : []),
+    { href: `${base}/obavestenja`, label: "Obaveštenja" },
     ...(isOwner ? [{ href: `${base}/podesavanja`, label: "Podešavanja" }] : []),
   ];
 }
