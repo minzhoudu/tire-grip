@@ -1,7 +1,10 @@
 /**
  * Customer chat as a small state machine:
  *
- *   service → vehicle → day → time → details → done
+ *   service → vehicle → (subtype) → day → time → details → done
+ *
+ * "subtype" only appears when the chosen vehicle has subcategories with a price for this
+ * service (e.g. "Kamion stočar" → "1 sprat" / "2 sprata").
  *
  * Pure reducer, no data fetching — the component loads days/slots for the
  * current step and renders the transcript from this state. Events that don't
@@ -10,7 +13,7 @@
  */
 import type { VehicleType } from "../availability/pricing.ts";
 
-export type Step = "service" | "vehicle" | "day" | "time" | "details" | "done";
+export type Step = "service" | "vehicle" | "subtype" | "day" | "time" | "details" | "done";
 
 export interface FlowState {
   step: Step;
@@ -18,6 +21,12 @@ export interface FlowState {
   vehicleTypeId: VehicleType | null;
   /** Vehicle was picked automatically because the service has a single price */
   vehicleAuto: boolean;
+  /** Vehicle with subcategories the customer picked (or the only one), while/after choosing its subcategory */
+  vehicleGroupId: string | null;
+  /** The group was picked automatically: it's the only vehicle this service has prices for */
+  groupAuto: boolean;
+  /** Subcategory id → its vehicle's id, for the vehicle types this service has prices for */
+  vehicleParents: Record<string, string>;
   date: string | null;
   slot: { time: string; startsAt: string } | null;
   /** Price list was opened from the welcome message */
@@ -27,9 +36,18 @@ export interface FlowState {
 }
 
 export type FlowEvent =
-  | { type: "chooseService"; serviceId: string; vehicleTypeIds: VehicleType[] }
+  | {
+      type: "chooseService";
+      serviceId: string;
+      /** Vehicle types the service has a price for (subcategories, never their group) */
+      vehicleTypeIds: VehicleType[];
+      /** Subcategory id → its vehicle's id, for those of vehicleTypeIds that are subcategories */
+      parents?: Record<string, string>;
+    }
   | { type: "showPrices" }
+  /** A vehicle without subcategories, or a vehicle group (then its subcategory is asked next) */
   | { type: "chooseVehicle"; vehicleTypeId: VehicleType }
+  | { type: "chooseSubtype"; vehicleTypeId: VehicleType }
   | { type: "chooseDay"; date: string }
   | { type: "chooseSlot"; time: string; startsAt: string }
   | { type: "back" }
@@ -42,6 +60,9 @@ export const initialFlow: FlowState = {
   serviceId: null,
   vehicleTypeId: null,
   vehicleAuto: false,
+  vehicleGroupId: null,
+  groupAuto: false,
+  vehicleParents: {},
   date: null,
   slot: null,
   showPrices: false,
@@ -64,20 +85,32 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
     case "chooseService": {
       if (state.step !== "service") return state;
       if (event.vehicleTypeIds.length === 0) return { ...s, notice: NOT_BOOKABLE_NOTICE };
-      const auto = event.vehicleTypeIds.length === 1;
-      return {
-        ...s,
-        serviceId: event.serviceId,
-        vehicleTypeId: auto ? event.vehicleTypeIds[0]! : null,
-        vehicleAuto: auto,
-        step: auto ? "day" : "vehicle",
-        date: null,
-        slot: null,
-      };
+      const parents = event.parents ?? {};
+      const base = { ...s, serviceId: event.serviceId, vehicleParents: parents, vehicleGroupId: null, groupAuto: false, date: null, slot: null };
+      if (event.vehicleTypeIds.length === 1) {
+        return { ...base, vehicleTypeId: event.vehicleTypeIds[0]!, vehicleAuto: true, step: "day" };
+      }
+      // Every option is a subcategory of the same vehicle: skip straight to choosing the subcategory.
+      const groups = new Set(event.vehicleTypeIds.map((id) => parents[id] ?? id));
+      const [onlyGroup] = groups;
+      if (groups.size === 1 && onlyGroup && !event.vehicleTypeIds.includes(onlyGroup)) {
+        return { ...base, vehicleTypeId: null, vehicleAuto: false, vehicleGroupId: onlyGroup, groupAuto: true, step: "subtype" };
+      }
+      return { ...base, vehicleTypeId: null, vehicleAuto: false, step: "vehicle" };
     }
 
-    case "chooseVehicle":
-      return state.step === "vehicle" ? { ...s, vehicleTypeId: event.vehicleTypeId, step: "day" } : state;
+    case "chooseVehicle": {
+      if (state.step !== "vehicle") return state;
+      const isGroup = Object.values(state.vehicleParents).includes(event.vehicleTypeId);
+      return isGroup
+        ? { ...s, vehicleGroupId: event.vehicleTypeId, step: "subtype" }
+        : { ...s, vehicleTypeId: event.vehicleTypeId, step: "day" };
+    }
+
+    case "chooseSubtype":
+      return state.step === "subtype" && state.vehicleParents[event.vehicleTypeId] === state.vehicleGroupId
+        ? { ...s, vehicleTypeId: event.vehicleTypeId, step: "day" }
+        : state;
 
     case "chooseDay":
       return state.step === "day" ? { ...s, date: event.date, step: "time" } : state;
@@ -94,11 +127,14 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
     case "back":
       switch (state.step) {
         case "vehicle":
-          return { ...s, step: "service", serviceId: null };
+          return { ...s, step: "service", serviceId: null, vehicleParents: {} };
+        case "subtype":
+          return state.groupAuto
+            ? { ...s, step: "service", serviceId: null, vehicleGroupId: null, groupAuto: false, vehicleParents: {} }
+            : { ...s, step: "vehicle", vehicleGroupId: null };
         case "day":
-          return state.vehicleAuto
-            ? { ...s, step: "service", serviceId: null, vehicleTypeId: null, vehicleAuto: false }
-            : { ...s, step: "vehicle", vehicleTypeId: null };
+          if (state.vehicleAuto) return { ...s, step: "service", serviceId: null, vehicleTypeId: null, vehicleAuto: false, vehicleParents: {} };
+          return state.vehicleGroupId ? { ...s, step: "subtype", vehicleTypeId: null } : { ...s, step: "vehicle", vehicleTypeId: null };
         case "time":
           return { ...s, step: "day", date: null };
         case "details":

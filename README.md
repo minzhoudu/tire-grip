@@ -34,6 +34,7 @@ Ne koristi `drizzle-kit push`: na bazi sa podacima pokušava da obriše i ponovo
 | `shops` | radnja (tenant): slug za link, broj dizalica (`bays`), korak termina, horizont zakazivanja, auto-potvrda |
 | `shop_members` | ko upravlja radnjom (vlasnik/radnik) — povezuje se sa auth tabelama u koraku auth |
 | `services`, `service_prices` | usluge i cena/trajanje po tipu vozila (putničko / SUV / kombi) |
+| `vehicle_types` | vrste vozila radnje, sa opcionim podkategorijama (`parent_id`, jedan nivo), npr. „Kamion stočar“ → „1 sprat“, „2 sprata“. Vrsta sa podkategorijama je samo grupa: cene i termini idu na podkategorije |
 | `working_hours` | nedeljno radno vreme, više intervala po danu (pauza za ručak) |
 | `schedule_exceptions` | praznici i posebno radno vreme za datum |
 | `blocked_times` | ručno blokirano vreme (jedna ili sve dizalice) |

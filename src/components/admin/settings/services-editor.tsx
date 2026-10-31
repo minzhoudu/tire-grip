@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { vehicleTypeLabel } from "@/lib/vehicle-types";
 import { useOptimistic, useState, useTransition } from "react";
 import {
   createServiceAction,
@@ -116,7 +117,64 @@ function ServiceForm({
   const [form, setForm] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const pickable = vehicleTypes.filter((vt) => vt.isActive || priceField(form, vt.id).enabled);
+  // Price rows: types without subcategories, and the subcategories of the ones that have them (grouped under it).
+  // Shown if active, or if the service already has a price for it (so saving doesn't silently drop it).
+  const tops = vehicleTypes.filter((vt) => vt.parentId === null);
+  const shown = (vt: VehicleTypeWithUsage, parentActive = true) => (vt.isActive && parentActive) || priceField(form, vt.id).enabled;
+  const priceGroups = tops.flatMap((top) => {
+    const subs = vehicleTypes.filter((c) => c.parentId === top.id);
+    if (subs.length === 0) return shown(top) ? [{ top, rows: [top] }] : [];
+    const rows = subs.filter((c) => shown(c, top.isActive));
+    return rows.length > 0 ? [{ top, rows }] : [];
+  });
+  const pickable = priceGroups.flatMap((g) => g.rows);
+
+  /** A plain render function, not a component: a component defined in here would remount (and drop input focus) on every keystroke. */
+  function priceRow(vt: VehicleTypeWithUsage, label: string) {
+    const f = priceField(form, vt.id);
+    return (
+      <div key={vt.id} className="rounded-xl bg-white px-3 py-2.5">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={f.enabled}
+            onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), enabled: e.target.checked } } }))}
+          />
+          <span className="text-sm font-semibold">{label}</span>
+        </label>
+        {f.enabled && (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-xs text-slate-500">Cena (din)</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                placeholder="npr. 1500"
+                className={`${input} mt-1 py-2`}
+                value={f.priceRsd}
+                onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), priceRsd: e.target.value } } }))}
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs text-slate-500">Trajanje (min), opciono</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={5}
+                max={480}
+                placeholder={form.durationMin || "30"}
+                className={`${input} mt-1 py-2`}
+                value={f.durationMin}
+                onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), durationMin: e.target.value } } }))}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   /** Swaps in the new kind's name/icon, unless the owner already typed their own (only the previous default gets replaced). */
   function chooseKind(kind: ServiceKind) {
@@ -250,53 +308,20 @@ function ServiceForm({
           <p className="rounded-xl bg-white px-3 py-2.5 text-sm text-slate-500">Radnja nema definisane vrste vozila. Dodajte ih u „Vrste vozila".</p>
         ) : (
           <div className="flex flex-col gap-2">
-            {pickable.map((vt) => {
-              const f = priceField(form, vt.id);
-              return (
-                <div key={vt.id} className="rounded-xl bg-white px-3 py-2.5">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={f.enabled}
-                      onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), enabled: e.target.checked } } }))}
-                    />
-                    <span className="text-sm font-semibold">
-                      {vt.icon} {vt.label}
-                    </span>
-                  </label>
-                  {f.enabled && (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <label className="block">
-                        <span className="text-xs text-slate-500">Cena (din)</span>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          placeholder="npr. 1500"
-                          className={`${input} mt-1 py-2`}
-                          value={f.priceRsd}
-                          onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), priceRsd: e.target.value } } }))}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs text-slate-500">Trajanje (min), opciono</span>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={5}
-                          max={480}
-                          placeholder={form.durationMin || "30"}
-                          className={`${input} mt-1 py-2`}
-                          value={f.durationMin}
-                          onChange={(e) => setForm((form) => ({ ...form, prices: { ...form.prices, [vt.id]: { ...priceField(form, vt.id), durationMin: e.target.value } } }))}
-                        />
-                      </label>
-                    </div>
-                  )}
+            {priceGroups.map(({ top, rows }) =>
+              rows[0] === top ? (
+                priceRow(top, `${top.icon ?? ""} ${top.label}`.trim())
+              ) : (
+                <div key={top.id} className="flex flex-col gap-1.5">
+                  <p className="px-1 pt-1 text-sm font-semibold text-slate-700">
+                    {top.icon} {top.label}
+                  </p>
+                  <div className="flex flex-col gap-2 border-l-2 border-slate-200 pl-2">
+                    {rows.map((vt) => priceRow(vt, vt.label))}
+                  </div>
                 </div>
-              );
-            })}
+              ),
+            )}
           </div>
         )}
       </div>
@@ -323,6 +348,11 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const vehicleTypeById = new Map(vehicleTypes.map((vt) => [vt.id, vt]));
+  const fullLabel = (id: string) => {
+    const vt = vehicleTypeById.get(id);
+    if (!vt) return "?";
+    return vehicleTypeLabel(vt.label, vt.parentId ? vehicleTypeById.get(vt.parentId)?.label : null);
+  };
   // The toggle flips at once; if the save fails it falls back to the server value when the transition ends.
   const [activeOverride, setActiveOverride] = useOptimistic<Record<string, boolean>, [string, boolean]>({}, (cur, [id, v]) => ({ ...cur, [id]: v }));
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
@@ -380,7 +410,7 @@ export function ServicesEditor({ slug, services, vehicleTypes }: { slug: string;
                   <p className="mt-1 text-sm text-slate-700">
                     {s.prices.length === 0
                       ? "Bez cene"
-                      : s.prices.map((p) => `${vehicleTypeById.get(p.vehicleTypeId)?.label ?? "?"} ${formatRsd(p.priceRsd)}`).join(" · ")}
+                      : s.prices.map((p) => `${fullLabel(p.vehicleTypeId)} ${formatRsd(p.priceRsd)}`).join(" · ")}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

@@ -1,0 +1,3 @@
+ALTER TABLE "vehicle_types" ADD COLUMN "parent_id" uuid;--> statement-breakpoint
+ALTER TABLE "vehicle_types" ADD CONSTRAINT "vehicle_types_parent_fk" FOREIGN KEY ("shop_id","parent_id") REFERENCES "public"."vehicle_types"("shop_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "vehicle_types" ADD CONSTRAINT "vehicle_types_not_own_parent" CHECK ("vehicle_types"."parent_id" is null or "vehicle_types"."parent_id" <> "vehicle_types"."id");

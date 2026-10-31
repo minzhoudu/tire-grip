@@ -17,6 +17,7 @@ import { flowReducer, initialFlow, type FlowState } from "@/lib/booking/flow";
 import { bookingRequestSchema, fieldErrors } from "@/lib/booking/request";
 import { googleMapsUrl } from "@/lib/maps-links";
 import { formatPhone } from "@/lib/phone";
+import { parentMap, vehicleChoices } from "@/lib/vehicle-types";
 import type { PublicService, PublicVehicleType } from "@/server/shops";
 
 /** The map library loads only when the customer opens "Kako do nas". */
@@ -107,6 +108,12 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
   const offerKey =
     flow.serviceId && flow.vehicleTypeId ? { slug: shop.slug, serviceId: flow.serviceId, vehicleTypeId: flow.vehicleTypeId } : null;
   const vehicleTypeById = new Map(shop.vehicleTypes.map((vt) => [vt.id, vt]));
+  const vehicleParents = parentMap(shop.vehicleTypes);
+  const choices = service ? vehicleChoices(shop.vehicleTypes, service.prices.map((p) => p.vehicleTypeId)) : [];
+  const group = flow.vehicleGroupId ? vehicleTypeById.get(flow.vehicleGroupId) ?? null : null;
+  const groupChoice = choices.find((c) => c.type.id === flow.vehicleGroupId) ?? null;
+  /** The top-level vehicle the customer tapped: the group, or a vehicle without subcategories. */
+  const pickedVehicle = group ?? (flow.vehicleTypeId && !vehicleParents[flow.vehicleTypeId] ? vehicleTypeById.get(flow.vehicleTypeId) ?? null : null);
 
   // A fresh service/vehicle choice starts back at the first page of days.
   useEffect(() => {
@@ -197,6 +204,7 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
                         type: "chooseService",
                         serviceId: s.id,
                         vehicleTypeIds: s.bookable ? s.prices.map((p) => p.vehicleTypeId) : [],
+                        parents: vehicleParents,
                       })
                     }
                   >
@@ -296,16 +304,16 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
               {service.icon} {service.name}
             </User>
 
-            {!flow.vehicleAuto && (
+            {!flow.vehicleAuto && !flow.groupAuto && (
               <Bot>
                 <p>
                   {service.description ? `${service.description}. ` : ""}Koje je vozilo?
                 </p>
                 {flow.step === "vehicle" && (
                   <Chips>
-                    {service.prices.map((p) => (
-                      <Chip key={p.vehicleTypeId} onClick={() => dispatch({ type: "chooseVehicle", vehicleTypeId: p.vehicleTypeId })}>
-                        {vehicleTypeById.get(p.vehicleTypeId)?.icon} {vehicleTypeById.get(p.vehicleTypeId)?.label}
+                    {choices.map(({ type }) => (
+                      <Chip key={type.id} onClick={() => dispatch({ type: "chooseVehicle", vehicleTypeId: type.id })}>
+                        {type.icon} {type.name}
                       </Chip>
                     ))}
                     <BackChip onClick={() => dispatch({ type: "back" })} />
@@ -314,11 +322,36 @@ export function BookingChat({ shop, reminderToken }: { shop: ChatShop; reminderT
               </Bot>
             )}
 
-            {flow.vehicleTypeId && !flow.vehicleAuto && (
+            {pickedVehicle && !flow.vehicleAuto && !flow.groupAuto && (
               <User>
-                {vehicleTypeById.get(flow.vehicleTypeId)?.icon} {vehicleTypeById.get(flow.vehicleTypeId)?.label}
+                {pickedVehicle.icon} {pickedVehicle.name}
               </User>
             )}
+
+            {group && (
+              <Bot>
+                <p>
+                  {flow.groupAuto && service.description ? `${service.description}. ` : ""}
+                  {group.icon} {group.name}: izaberite tačno koji.
+                </p>
+                {flow.step === "subtype" && (
+                  <Chips>
+                    {(groupChoice?.subtypes ?? []).map((sub) => {
+                      const p = service.prices.find((x) => x.vehicleTypeId === sub.id);
+                      return (
+                        <Chip key={sub.id} onClick={() => dispatch({ type: "chooseSubtype", vehicleTypeId: sub.id })}>
+                          {sub.name}
+                          {p && <span className="ml-1.5 font-mono text-rust-600">{formatRsd(p.priceRsd)}</span>}
+                        </Chip>
+                      );
+                    })}
+                    <BackChip onClick={() => dispatch({ type: "back" })} />
+                  </Chips>
+                )}
+              </Bot>
+            )}
+
+            {group && flow.vehicleTypeId && <User>{vehicleTypeById.get(flow.vehicleTypeId)?.name}</User>}
 
             {flow.vehicleTypeId && price && (
               <Bot>
@@ -695,27 +728,33 @@ function PriceList({ services, vehicleTypes }: { services: PublicService[]; vehi
       <p className="font-semibold">💰 Cenovnik</p>
       <div className="mt-2 flex flex-col gap-3">
         {services.map((s) => {
-          const rows = vehicleTypes.flatMap((vt) => {
-            const p = s.prices.find((x) => x.vehicleTypeId === vt.id);
-            return p ? [{ vt, priceRsd: p.priceRsd }] : [];
-          });
+          const priced = vehicleChoices(vehicleTypes, s.prices.map((p) => p.vehicleTypeId));
+          const priceOf = (id: string) => s.prices.find((x) => x.vehicleTypeId === id)?.priceRsd ?? 0;
           return (
             <div key={s.id} className="border-t border-slate-100 pt-2 first:border-t-0 first:pt-0">
               <p className="font-semibold text-slate-900">
                 {s.icon} {s.name}
               </p>
-              {rows.length === 0 ? (
+              {priced.length === 0 ? (
                 <p className="mt-1 text-sm text-slate-500">Cena na upit</p>
               ) : (
                 <ul className="mt-1 flex flex-col gap-1 text-sm">
-                  {rows.map(({ vt, priceRsd }) => (
-                    <li key={vt.id} className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0 text-slate-600">
-                        {vt.icon} {vt.label}
-                      </span>
-                      <span className="shrink-0 font-mono font-bold whitespace-nowrap tabular-nums text-rust-600">{formatRsd(priceRsd)}</span>
-                    </li>
-                  ))}
+                  {priced.map(({ type, subtypes }) =>
+                    subtypes.length === 0 ? (
+                      <PriceRow key={type.id} label={`${type.icon ?? ""} ${type.name}`.trim()} priceRsd={priceOf(type.id)} />
+                    ) : (
+                      <li key={type.id}>
+                        <span className="text-slate-600">
+                          {type.icon} {type.name}
+                        </span>
+                        <ul className="mt-0.5 flex flex-col gap-0.5 border-l-2 border-slate-100 pl-3">
+                          {subtypes.map((sub) => (
+                            <PriceRow key={sub.id} label={sub.name} priceRsd={priceOf(sub.id)} />
+                          ))}
+                        </ul>
+                      </li>
+                    ),
+                  )}
                 </ul>
               )}
             </div>
@@ -723,6 +762,15 @@ function PriceList({ services, vehicleTypes }: { services: PublicService[]; vehi
         })}
       </div>
     </div>
+  );
+}
+
+function PriceRow({ label, priceRsd }: { label: string; priceRsd: number }) {
+  return (
+    <li className="flex items-baseline justify-between gap-3">
+      <span className="min-w-0 text-slate-600">{label}</span>
+      <span className="shrink-0 font-mono font-bold whitespace-nowrap tabular-nums text-rust-600">{formatRsd(priceRsd)}</span>
+    </li>
   );
 }
 

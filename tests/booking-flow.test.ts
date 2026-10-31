@@ -105,3 +105,53 @@ describe("slot taken while filling in the form", () => {
 it("restart clears everything", () => {
   expect(run(swap, car, friday, slot, { type: "submitted" }, { type: "restart" })).toEqual(initialFlow);
 });
+
+describe("vehicle subcategories", () => {
+  // Kamion stočar (truck) has subcategories f1/f2; Putničko (car) doesn't.
+  const parents = { f1: "truck", f2: "truck" };
+  const withTruck: FlowEvent = { type: "chooseService", serviceId: "svc-swap", vehicleTypeIds: ["car", "f1", "f2"], parents };
+
+  it("asks for the subcategory after a vehicle that has them", () => {
+    const s = run(withTruck, { type: "chooseVehicle", vehicleTypeId: "truck" });
+    expect(s.step).toBe("subtype");
+    expect(s.vehicleGroupId).toBe("truck");
+    expect(s.vehicleTypeId).toBeNull();
+    const picked = run(withTruck, { type: "chooseVehicle", vehicleTypeId: "truck" }, { type: "chooseSubtype", vehicleTypeId: "f2" });
+    expect(picked.step).toBe("day");
+    expect(picked.vehicleTypeId).toBe("f2");
+  });
+
+  it("goes straight to the day for a vehicle without subcategories", () => {
+    const s = run(withTruck, car);
+    expect(s.step).toBe("day");
+    expect(s.vehicleGroupId).toBeNull();
+  });
+
+  it("ignores a subcategory of another vehicle", () => {
+    const s = run(withTruck, { type: "chooseVehicle", vehicleTypeId: "truck" }, { type: "chooseSubtype", vehicleTypeId: "car" });
+    expect(s.step).toBe("subtype");
+  });
+
+  it("skips the vehicle question when all options are subcategories of one vehicle", () => {
+    const s = run({ type: "chooseService", serviceId: "svc-swap", vehicleTypeIds: ["f1", "f2"], parents });
+    expect(s.step).toBe("subtype");
+    expect(s.groupAuto).toBe(true);
+    // back from there returns to the services
+    expect(flowReducer(s, { type: "back" })).toMatchObject({ step: "service", serviceId: null, vehicleGroupId: null, groupAuto: false });
+  });
+
+  it("a single priced subcategory is picked automatically, like a single vehicle", () => {
+    const s = run({ type: "chooseService", serviceId: "svc-swap", vehicleTypeIds: ["f2"], parents });
+    expect(s).toMatchObject({ step: "day", vehicleTypeId: "f2", vehicleAuto: true });
+  });
+
+  it("back walks day → subtype → vehicle → service", () => {
+    let s = run(withTruck, { type: "chooseVehicle", vehicleTypeId: "truck" }, { type: "chooseSubtype", vehicleTypeId: "f1" });
+    s = flowReducer(s, { type: "back" });
+    expect(s).toMatchObject({ step: "subtype", vehicleGroupId: "truck", vehicleTypeId: null });
+    s = flowReducer(s, { type: "back" });
+    expect(s).toMatchObject({ step: "vehicle", vehicleGroupId: null });
+    s = flowReducer(s, { type: "back" });
+    expect(s).toMatchObject({ step: "service", serviceId: null });
+  });
+});
