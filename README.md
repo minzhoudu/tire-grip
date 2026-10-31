@@ -110,12 +110,12 @@ Kad kupac pošalje zahtev ili sam otkaže termin, svi članovi radnje dobijaju o
 
 - **Android (Chrome):** panel → Meni → Obaveštenja → „Uključi obaveštenja“.
 - **iPhone (iOS 16.4+):** Safari → Podeli → „Dodaj na početni ekran“, pa u aplikaciji sa početnog ekrana → Obaveštenja → „Uključi obaveštenja“. Stranica sama prepozna iPhone i prikaže ova 3 koraka. Na Zahtevima stoji kartica koja podseća na ovo dok se ne uključi.
-- **Email kao rezerva:** član čiji nijedan uređaj nije primio push dobija isti sadržaj na email (Resend), osim ako to isključi na stranici Obaveštenja (`shop_members.email_notifications`).
+- **Email kao rezerva (podrazumevano isključen):** član koji ga uključi na stranici Obaveštenja (`shop_members.email_notifications`) dobija isti sadržaj na email (Resend) kad nijedan njegov uređaj nije primio push.
 - Klik na obaveštenje otvara panel na tom zahtevu; broj na ikonici aplikacije = broj zahteva koji čekaju.
 
 Kako radi: `push_subscriptions` čuva po jedan red za svaki uređaj člana (po radnji). `src/server/notifications.ts` (`notifyShop`) šalje svakom trenutnom članu, briše uređaje koje push servis prijavi kao nepostojeće (404/410) i šalje email onima do kojih push nije stigao. Poziva se iz `submitBookingAction` i `cancelBookingAction` preko `after()` (`src/server/notify-later.ts`), pa ne usporava kupca i ne može da obori rezervaciju. Service worker je `public/sw.js`, a manifest se pravi za svaku radnju posebno (`/admin/{slug}/app.webmanifest`). Server šalje samo na adrese pravih push servisa (Apple, Google, Mozilla, Microsoft), vidi `src/lib/notifications/endpoint.ts`.
 
-Ključevi (jednom, pa u env): `pnpm dlx web-push generate-vapid-keys` → `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`. Bez njih push je isključen (stranica to kaže), a obaveštenja idu samo na email.
+Ključevi (jednom, pa u env): `pnpm dlx web-push generate-vapid-keys` → `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`. Bez njih push je isključen (stranica to kaže), a obaveštenja idu samo na email onima koji su ga uključili.
 
 Testovi: `tests/notifications.test.ts` (tekstovi, dozvoljene adrese) i `tests/notifications.int.test.ts` (ko dobija push, ko email, čišćenje uređaja).
 

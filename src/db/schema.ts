@@ -156,8 +156,8 @@ export const shopMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: memberRole("role").notNull().default("owner"),
-    /** Email this member about new requests/cancellations when none of their devices has push turned on. */
-    emailNotifications: boolean("email_notifications").notNull().default(true),
+    /** Opt-in: email this member about new requests/cancellations when none of their devices has push turned on. */
+    emailNotifications: boolean("email_notifications").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [unique("shop_members_shop_user_uq").on(t.shopId, t.userId), index("shop_members_user_idx").on(t.userId)],

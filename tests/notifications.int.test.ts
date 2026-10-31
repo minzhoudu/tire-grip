@@ -88,8 +88,22 @@ describe.skipIf(!process.env.DATABASE_URL)("shop notifications (Postgres)", () =
     await closeDb();
   });
 
-  it("emails every member when nobody has push yet", async () => {
+  it("sends no email by default: members opt in on the Obaveštenja page", async () => {
     const db = getDb();
+    expect(await getNotificationSettings(db, shopId, ownerId)).toEqual({ emailNotifications: false, deviceCount: 0 });
+    const r = await createBookingRequest(db, request(8, "064 800 0000"));
+    if (!r.ok) throw new Error("booking failed");
+
+    const f = fakes();
+    const report = await notifyShop(db, { kind: "new_booking", bookingId: r.booking.id }, { ...f, origin });
+    expect(report).toEqual({ pushed: 0, emailed: 0, removed: 0 });
+    expect(f.emails).toHaveLength(0);
+  });
+
+  it("emails every member who turned email on, when nobody has push yet", async () => {
+    const db = getDb();
+    await setEmailNotifications(db, shopId, ownerId, true);
+    await setEmailNotifications(db, shopId, staffId, true);
     const r = await createBookingRequest(db, request(9, "064 800 0001"));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -120,7 +134,7 @@ describe.skipIf(!process.env.DATABASE_URL)("shop notifications (Postgres)", () =
     expect(payload.title).toBe("🛞 Novi zahtev: Marko");
     expect(payload.url).toBe(`${origin}/admin/${slug}#booking-${r.booking.id}`);
     expect(payload.tag).toBe(`booking-${r.booking.id}`);
-    expect(payload.badge).toBe(2); // both requests so far are pending
+    expect(payload.badge).toBe(3); // all three requests so far are pending
   });
 
   it("removes devices the push service says are gone, and emails if that was the only one", async () => {

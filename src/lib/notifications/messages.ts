@@ -60,7 +60,7 @@ export function shopNotificationEmail(e: ShopEventDetails, adminUrl: string): { 
   <p style="color:#334155;font-size:14px;margin:0 0 4px">${escapeHtml(n.body)}</p>
   <p style="color:#334155;font-size:14px;margin:0">Cena: ${escapeHtml(formatRsd(e.priceRsd))}</p>
   <a href="${escapeHtml(adminUrl)}" style="display:inline-block;margin:16px 0;padding:12px 20px;background:#f5b700;color:#0a1a33;font-weight:bold;text-decoration:none;border-radius:10px;border:2px solid #0a1a33">${button}</a>
-  <p style="font-size:12px;color:#94a3b8;margin-top:32px">Ovaj email dobijate jer na telefonu niste uključili obaveštenja. Uključite ih u panelu → Obaveštenja, ili tamo isključite email.</p>
+  <p style="font-size:12px;color:#94a3b8;margin-top:32px">Ovaj email dobijate jer ste uključili email obaveštenja, a nijedan vaš telefon nije primio push obaveštenje. Isključite ih u panelu → Obaveštenja.</p>
 </div>`;
   return { subject: `${n.title} | Moj Vulkanizer`, html };
 }

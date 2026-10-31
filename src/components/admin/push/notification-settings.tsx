@@ -161,7 +161,7 @@ function DeviceStatus({
     case "loading":
       return <p className="text-sm text-slate-500">Proveravam…</p>;
     case "not_configured":
-      return <Note>Push obaveštenja još nisu podešena na serveru. Do tada stižu na email.</Note>;
+      return <Note>Push obaveštenja još nisu podešena na serveru. Do tada možete da uključite email ispod.</Note>;
     case "ios_install":
       return <IosInstallSteps />;
     case "unsupported":

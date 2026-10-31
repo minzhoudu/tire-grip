@@ -2,9 +2,9 @@
  * Notifying a shop's members when a customer books or cancels on their own.
  *
  * Every current member gets a push on each device they turned it on for
- * (Obaveštenja page). A member with no device that took the push gets an
- * email instead, unless they switched email off — so nobody misses a request
- * because push isn't set up yet or the phone's subscription expired.
+ * (Obaveštenja page). A member who turned email on there (it's off by
+ * default) gets an email instead when none of their devices took the push,
+ * e.g. push isn't set up yet or the phone's subscription expired.
  *
  * Senders are injectable so tests run without a push service or Resend.
  */
@@ -187,7 +187,7 @@ export async function getNotificationSettings(db: DB, shopId: string, userId: st
     .select({ id: pushSubscriptions.id })
     .from(pushSubscriptions)
     .where(and(eq(pushSubscriptions.shopId, shopId), eq(pushSubscriptions.userId, userId)));
-  return { emailNotifications: member?.emailNotifications ?? true, deviceCount: devices.length };
+  return { emailNotifications: member?.emailNotifications ?? false, deviceCount: devices.length };
 }
 
 export async function setEmailNotifications(db: DB, shopId: string, userId: string, enabled: boolean): Promise<void> {
