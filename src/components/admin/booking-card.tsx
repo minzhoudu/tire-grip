@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { changeStatusAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
+import { changeStatusAction, deleteBookingAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
 import { InlineSpinner } from "@/components/ui/busy";
 import { sendReminder, useSentReminders } from "./reminder-store";
+import { useSupportMode } from "./support-mode";
 import { useToast } from "@/components/ui/toast";
 import { formatRsd } from "@/lib/availability/labels";
 import { ACTIONS, CUSTOMER_CANCEL_REASON, STATUS_LABELS, type BookingAction, type BookingStatus } from "@/lib/booking/status";
@@ -72,6 +73,8 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
   const [actions, setActions] = useState(b.actions);
   const [notifyUrl, setNotifyUrl] = useState(b.notifyUrl);
   const sentHere = useSentReminders();
+  const supportMode = useSupportMode();
+  const [deleted, setDeleted] = useState(false);
   const reminderDue = b.reminder && status === "confirmed" && !sentHere(b.id, b.reminder.sent);
 
   const isDestructive = (a: BookingAction) => a === "reject" || a === "cancel" || a === "noShow";
@@ -103,6 +106,10 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
 
   const chatUrl = whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `);
   const cancelledByCustomer = status === "cancelled" && b.cancelReason === CUSTOMER_CANCEL_REASON;
+
+  if (deleted) {
+    return <p className="rounded-2xl border-2 border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">🗑️ Termin je obrisan iz baze.</p>;
+  }
 
   return (
     <article
@@ -207,6 +214,52 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
           ))}
         </div>
       )}
+
+      {supportMode && <SupportDeleteButton slug={slug} bookingId={b.id} onDeleted={() => setDeleted(true)} />}
     </article>
+  );
+}
+
+/** Support-only ("Uđi kao"): removes the booking from the database for good, after a second tap. */
+function SupportDeleteButton({ slug, bookingId, onDeleted }: { slug: string; bookingId: string; onDeleted: () => void }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  function remove() {
+    if (!confirming) return setConfirming(true);
+    startTransition(async () => {
+      const r = await deleteBookingAction({ slug, bookingId });
+      if (!r.ok) {
+        toast(r.reason === "not_found" ? "Termin je već obrisan." : "Brisanje nije dozvoljeno.", "error");
+        setConfirming(false);
+        return;
+      }
+      onDeleted();
+      toast("Termin je obrisan iz baze.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="mt-3 border-t border-dashed border-red-200 pt-3">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={remove}
+        className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold active:scale-[0.98] disabled:opacity-60 ${
+          confirming ? "bg-red-600 text-white" : "border-2 border-red-300 bg-white text-red-700"
+        }`}
+      >
+        {pending && <InlineSpinner />}
+        {confirming ? "Sigurno? Briše se zauvek, bez istorije" : "🛠️ Obriši iz baze (podrška)"}
+      </button>
+      {confirming && !pending && (
+        <button type="button" onClick={() => setConfirming(false)} className="mt-1 w-full py-1 text-xs text-slate-500">
+          Odustani
+        </button>
+      )}
+    </div>
   );
 }
