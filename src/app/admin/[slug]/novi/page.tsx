@@ -25,7 +25,7 @@ export default async function NewBookingPage({ params, searchParams }: Props) {
   return (
     <div>
       <h1 className="mb-1 px-1 font-mono text-xl font-bold">Novi termin</h1>
-      <p className="mb-4 px-1 text-sm text-slate-600">Za kupce koji zovu telefonom. Termin se odmah upisuje kao potvrđen.</p>
+      <p className="mb-4 px-1 text-sm text-slate-600">Za kupce koji zovu telefonom. Dovoljno je izabrati vreme, podaci kupca nisu obavezni.</p>
       <ManualBookingForm
         slug={slug}
         base={base}

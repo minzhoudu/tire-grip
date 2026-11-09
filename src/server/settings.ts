@@ -20,6 +20,7 @@ import {
 } from "../db/schema.ts";
 import { hoursForDate, type DateException, type WeeklyHours } from "../lib/availability/index.ts";
 import type { VehicleType } from "../lib/availability/pricing.ts";
+import { SHOP_ENTRY_NAME } from "../lib/booking/status.ts";
 import { addDays, formatMinutes, utcToZoned, zonedToUtc } from "../lib/availability/zoned.ts";
 
 export type ServiceKind = (typeof services.$inferInsert)["kind"];
@@ -134,9 +135,15 @@ async function findBookingsOutsideHours(
   const exceptionDates = new Set(exceptions.map((e) => e.date));
 
   const rows = await db
-    .select({ id: bookings.id, startsAt: bookings.startsAt, endsAt: bookings.endsAt, customerName: customers.name })
+    .select({
+      id: bookings.id,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      customerName: sql<string>`coalesce(${customers.name}, ${bookings.guestName}, ${SHOP_ENTRY_NAME})`,
+    })
     .from(bookings)
-    .innerJoin(customers, and(eq(customers.id, bookings.customerId), eq(customers.shopId, bookings.shopId)))
+    // left join: a Rezervacija radnje (no customer) must be warned about too
+    .leftJoin(customers, and(eq(customers.id, bookings.customerId), eq(customers.shopId, bookings.shopId)))
     .where(and(eq(bookings.shopId, shop.id), inArray(bookings.status, ["pending", "confirmed"]), gt(bookings.endsAt, now)));
 
   const affected: AffectedBooking[] = [];

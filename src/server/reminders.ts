@@ -89,7 +89,8 @@ async function eligibleCustomerIds(db: DB, shopId: string): Promise<string[]> {
     .from(bookings)
     .innerJoin(services, and(eq(services.id, bookings.serviceId), eq(services.shopId, bookings.shopId)))
     .where(and(eq(bookings.shopId, shopId), eq(services.kind, "seasonal_swap"), inArray(bookings.status, ACTIVE_STATUSES)));
-  const withHistory = [...new Set(swapRows.map((r) => r.customerId))];
+  // A Rezervacija radnje (no customer) has no one to remind.
+  const withHistory = [...new Set(swapRows.flatMap((r) => (r.customerId ? [r.customerId] : [])))];
   if (withHistory.length === 0) return [];
 
   const rows = await db

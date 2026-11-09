@@ -10,10 +10,19 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { dayLongLabel } from "@/lib/availability";
 import { parseTime } from "@/lib/availability/zoned";
-import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/lib/booking/request";
+import {
+  adminBookingRequestSchema,
+  bookingCustomerSchema,
+  bookingRequestSchema,
+  fieldErrors,
+  type AdminBookingRequestInput,
+  type BookingRequestInput,
+} from "@/lib/booking/request";
 import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "@/lib/booking/status";
 import {
   adminDaySlots,
+  adminFirstFreeSlot,
+  attachCustomerToBooking,
   changeBookingStatus,
   deleteBookingForSupport,
   completeBookings,
@@ -144,13 +153,31 @@ export async function adminSlotsAction(
   };
 }
 
+const firstFreeInput = z.object({ slug: slugSchema, serviceId: z.uuid(), vehicleTypeId: z.uuid() });
+
+/** The earliest free time from now for this service + vehicle, shown on "Zakaži prvi slobodan termin" before it's tapped. */
+export async function firstFreeSlotAction(
+  raw: z.input<typeof firstFreeInput>,
+): Promise<{ ok: true; slot: { date: string; time: string; startsAt: string } | null } | { ok: false }> {
+  const input = firstFreeInput.safeParse(raw);
+  if (!input.success) return { ok: false };
+  await requireShopAccess(input.data.slug);
+  const db = getDb();
+  const ctx = await loadShopContext(db, input.data.slug);
+  if (!ctx) return { ok: false };
+  const slot = await adminFirstFreeSlot(db, ctx, input.data.serviceId, input.data.vehicleTypeId);
+  return { ok: true, slot: slot ? { date: slot.date, time: slot.time, startsAt: slot.startsAt.toISOString() } : null };
+}
+
 export type ManualBookingResult =
-  | { ok: true; messageUrl: string; summary: string }
+  /** messageUrl is null for a Rezervacija radnje (no phone to send the confirmation to) */
+  | { ok: true; messageUrl: string | null; summary: string }
   | { ok: false; reason: "invalid"; errors: Record<string, string> }
   | { ok: false; reason: "slot_unavailable" | "service_unavailable" | "shop_not_found" };
 
-export async function createManualBookingAction(raw: BookingRequestInput & { bay?: number }): Promise<ManualBookingResult> {
-  const parsed = bookingRequestSchema.safeParse(raw);
+/** Nothing about the customer is required: with no phone it's a "Rezervacija radnje", details can be added later. */
+export async function createManualBookingAction(raw: AdminBookingRequestInput & { bay?: number }): Promise<ManualBookingResult> {
+  const parsed = adminBookingRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
   const { shop } = await requireShopAccess(parsed.data.slug);
   const preferredBay = Number.isInteger(raw.bay) && raw.bay! >= 1 && raw.bay! <= shop.bays ? raw.bay : undefined;
@@ -166,6 +193,19 @@ export async function createManualBookingAction(raw: BookingRequestInput & { bay
     messageUrl: customerMessageUrl(booking, shop, "confirm", await getOrigin()),
     summary: `${booking.customerName} · ${dayLongLabel(result.booking.date)} u ${result.booking.time}h${shop.bays > 1 ? ` · boks ${result.booking.bay}` : ""}`,
   };
+}
+
+const attachCustomerInput = bookingCustomerSchema.extend({ slug: slugSchema, bookingId: z.uuid() });
+
+export type AttachCustomerActionResult = { ok: true } | { ok: false; reason: "invalid"; errors: Record<string, string> } | { ok: false; reason: "not_found" | "empty" };
+
+/** Adds the customer's name/phone/car to a Rezervacija radnje afterwards. */
+export async function attachBookingCustomerAction(raw: z.input<typeof attachCustomerInput>): Promise<AttachCustomerActionResult> {
+  const parsed = attachCustomerInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
+  const { shop } = await requireShopAccess(parsed.data.slug);
+  const { bookingId, name, phone, vehicleLabel } = parsed.data;
+  return attachCustomerToBooking(getDb(), shop.id, bookingId, { name, phone, vehicleLabel });
 }
 
 /* ------------------------------------------------------------------ blocked time */

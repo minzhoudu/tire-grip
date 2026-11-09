@@ -11,10 +11,11 @@
  *    next bay). If the slot is gone, nothing is written.
  */
 import { and, eq, sql } from "drizzle-orm";
-import type { DB } from "../db/index.ts";
+import type { DB, Tx } from "../db/index.ts";
 import { bookings, customers, vehicles } from "../db/schema.ts";
 import { addDays, getDayAvailability, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
 import type { BookingRequest } from "../lib/booking/request.ts";
+import { formatPhone } from "../lib/phone.ts";
 import { findOffer, loadBusy, loadShopContext, type ShopContext } from "./shops.ts";
 
 export type CreateBookingResult =
@@ -30,7 +31,8 @@ export type CreateBookingResult =
         time: string; // local "HH:MM"
         priceRsd: number;
         durationMin: number;
-        customerId: string;
+        /** null = a "Rezervacija radnje" without the customer's data */
+        customerId: string | null;
         vehicleId: string | null;
       };
       shop: ShopContext["shop"];
@@ -72,12 +74,54 @@ export interface CreateBookingOptions {
   preferredBay?: number;
 }
 
+/**
+ * A booking request. From the customer chat, name and phone are required (bookingRequestSchema).
+ * The shop entering one itself may leave both out: with no phone it's a "Rezervacija radnje"
+ * (no customer row, an optional name kept on the booking), so a quick entry takes a few taps.
+ */
+export type NewBookingRequest = Omit<BookingRequest, "name" | "phone"> & { name: string; phone: string | null };
+
+/**
+ * The customer with this phone (created if new) and, if a car was named, their vehicle.
+ * Without a name, a new customer is listed under their number and a known one keeps their name.
+ */
+export async function upsertCustomer(
+  tx: Tx,
+  shopId: string,
+  input: { name: string; phone: string; vehicleLabel: string; vehicleTypeId: string; reminderConsent: boolean; now: Date },
+): Promise<{ customerId: string; vehicleId: string | null }> {
+  const { now } = input;
+  const consent = input.reminderConsent ? { reminderConsent: true, reminderConsentAt: now, optedOutAt: null } : {};
+  const [customer] = await tx
+    .insert(customers)
+    .values({ shopId, name: input.name || formatPhone(input.phone), phone: input.phone, ...consent })
+    .onConflictDoUpdate({
+      target: [customers.shopId, customers.phone],
+      set: { ...(input.name ? { name: input.name } : {}), updatedAt: now, ...consent },
+    })
+    .returning({ id: customers.id });
+  if (!customer) throw new Error("customer upsert returned nothing");
+  if (!input.vehicleLabel) return { customerId: customer.id, vehicleId: null };
+
+  const [existing] = await tx
+    .select({ id: vehicles.id })
+    .from(vehicles)
+    .where(and(eq(vehicles.shopId, shopId), eq(vehicles.customerId, customer.id), sql`lower(${vehicles.label}) = lower(${input.vehicleLabel})`))
+    .limit(1);
+  if (existing) return { customerId: customer.id, vehicleId: existing.id };
+  const [created] = await tx
+    .insert(vehicles)
+    .values({ shopId, customerId: customer.id, label: input.vehicleLabel, vehicleTypeId: input.vehicleTypeId })
+    .returning({ id: vehicles.id });
+  return { customerId: customer.id, vehicleId: created?.id ?? null };
+}
+
 /** How far ahead the shop itself can enter bookings. */
 export const ADMIN_HORIZON_DAYS = 120;
 
 export async function createBookingRequest(
   db: DB,
-  req: BookingRequest,
+  req: NewBookingRequest,
   { now = new Date(), source = "web", preferredBay }: CreateBookingOptions = {},
 ): Promise<CreateBookingResult> {
   const ctx = await loadShopContext(db, req.slug);
@@ -95,6 +139,7 @@ export async function createBookingRequest(
       ? { ...ctx.settings, minNoticeMin: 0, bookingHorizonDays: Math.max(ctx.settings.bookingHorizonDays, ADMIN_HORIZON_DAYS) }
       : ctx.settings;
   const status = source === "admin" || ctx.shop.autoConfirm ? ("confirmed" as const) : ("pending" as const);
+  if (!req.phone && source !== "admin") throw new Error("A customer booking needs a phone number");
 
   try {
     return await db.transaction(async (tx) => {
@@ -117,41 +162,23 @@ export async function createBookingRequest(
       const slot = day.slots.find((s) => s.startsAt.getTime() === startsAt.getTime());
       if (!slot || !slot.available) throw new SlotTaken();
 
-      const consent = req.reminderConsent
-        ? { reminderConsent: true, reminderConsentAt: now, optedOutAt: null }
-        : {};
-      const [customer] = await tx
-        .insert(customers)
-        .values({ shopId: ctx.shop.id, name: req.name, phone: req.phone, ...consent })
-        .onConflictDoUpdate({
-          target: [customers.shopId, customers.phone],
-          set: { name: req.name, updatedAt: now, ...consent },
-        })
-        .returning({ id: customers.id });
-      if (!customer) throw new Error("customer upsert returned nothing");
-
+      let customerId: string | null = null;
+      let guestName: string | null = null;
       let vehicleId: string | null = null;
-      if (req.vehicleLabel) {
-        const [existing] = await tx
-          .select({ id: vehicles.id })
-          .from(vehicles)
-          .where(
-            and(
-              eq(vehicles.shopId, ctx.shop.id),
-              eq(vehicles.customerId, customer.id),
-              sql`lower(${vehicles.label}) = lower(${req.vehicleLabel})`,
-            ),
-          )
-          .limit(1);
-        if (existing) {
-          vehicleId = existing.id;
-        } else {
-          const [created] = await tx
-            .insert(vehicles)
-            .values({ shopId: ctx.shop.id, customerId: customer.id, label: req.vehicleLabel, vehicleTypeId: req.vehicleTypeId })
-            .returning({ id: vehicles.id });
-          vehicleId = created?.id ?? null;
-        }
+      let customerNote = req.note || null;
+      if (req.phone) {
+        ({ customerId, vehicleId } = await upsertCustomer(tx, ctx.shop.id, {
+          name: req.name,
+          phone: req.phone,
+          vehicleLabel: req.vehicleLabel,
+          vehicleTypeId: req.vehicleTypeId,
+          reminderConsent: req.reminderConsent,
+          now,
+        }));
+      } else {
+        // Rezervacija radnje: no customer to hang a vehicle on, so the car goes into the note.
+        guestName = req.name || null;
+        if (req.vehicleLabel) customerNote = [`Auto: ${req.vehicleLabel}`, req.note].filter(Boolean).join(" · ");
       }
 
       const bays = preferredBay && slot.freeBays.includes(preferredBay) ? [preferredBay, ...slot.freeBays.filter((b) => b !== preferredBay)] : slot.freeBays;
@@ -164,7 +191,8 @@ export async function createBookingRequest(
               .insert(bookings)
               .values({
                 shopId: ctx.shop.id,
-                customerId: customer.id,
+                customerId,
+                guestName,
                 vehicleId,
                 serviceId: service.id,
                 vehicleTypeId: req.vehicleTypeId,
@@ -175,7 +203,7 @@ export async function createBookingRequest(
                 bay,
                 status,
                 source,
-                customerNote: req.note || null,
+                customerNote,
                 confirmedAt: status === "confirmed" ? now : null,
               })
               .returning(),
@@ -193,7 +221,7 @@ export async function createBookingRequest(
               time: slot.time,
               priceRsd: row.priceRsd,
               durationMin: row.durationMin,
-              customerId: customer.id,
+              customerId,
               vehicleId,
             },
             shop: ctx.shop,

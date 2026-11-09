@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookingRequestSchema, fieldErrors } from "../src/lib/booking/request.ts";
+import { adminBookingRequestSchema, bookingRequestSchema, fieldErrors } from "../src/lib/booking/request.ts";
 
 const valid = {
   slug: "brzi-tocak",
@@ -34,5 +34,28 @@ describe("bookingRequestSchema", () => {
     expect(bookingRequestSchema.safeParse({ ...valid, vehicleTypeId: "truck" }).success).toBe(false);
     expect(bookingRequestSchema.safeParse({ ...valid, startsAt: "sutra" }).success).toBe(false);
     expect(bookingRequestSchema.safeParse({ ...valid, note: "x".repeat(301) }).success).toBe(false);
+  });
+});
+
+describe("adminBookingRequestSchema (the shop entering a booking itself)", () => {
+  const base = {
+    slug: "brzi-tocak",
+    serviceId: "8b0c6c2e-6d4b-4b8e-9a8e-1f3c2d4e5f60",
+    vehicleTypeId: "8b0c6c2e-6d4b-4b8e-9a8e-1f3c2d4e5f61",
+    startsAt: "2026-11-10T09:00:00.000Z",
+  };
+
+  it("needs nothing about the customer", () => {
+    const r = adminBookingRequestSchema.parse(base);
+    expect(r).toMatchObject({ name: "", phone: null, vehicleLabel: "", note: "" });
+  });
+
+  it("normalizes a phone when one is given, and still rejects a wrong one", () => {
+    expect(adminBookingRequestSchema.parse({ ...base, phone: "064 123 4567" }).phone).toBe("+381641234567");
+    expect(adminBookingRequestSchema.safeParse({ ...base, phone: "123" }).success).toBe(false);
+  });
+
+  it("accepts a one-letter name (the chat still asks for two)", () => {
+    expect(adminBookingRequestSchema.parse({ ...base, name: "M" }).name).toBe("M");
   });
 });

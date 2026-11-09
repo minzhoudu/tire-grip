@@ -28,7 +28,40 @@ export const bookingRequestSchema = z.object({
   reminderConsent: z.boolean().optional().default(false),
 });
 
+/** Phone that may be left empty: "" → null, otherwise it has to be a valid number. */
+const optionalPhone = z
+  .string()
+  .trim()
+  .optional()
+  .default("")
+  .transform((v, ctx) => {
+    if (!v) return null;
+    const e164 = normalizePhone(v);
+    if (!e164) {
+      ctx.addIssue({ code: "custom", message: "Unesite ispravan broj telefona, npr. 064 123 4567" });
+      return z.NEVER;
+    }
+    return e164;
+  });
+
+/**
+ * A booking the shop enters itself (a phone call, someone at the door): nothing about the customer
+ * is required. With no phone it becomes a "Rezervacija radnje" (see createBookingRequest).
+ */
+export const adminBookingRequestSchema = bookingRequestSchema.extend({
+  name: z.string().trim().max(60, "Ime je predugačko").optional().default(""),
+  phone: optionalPhone,
+});
+
+/** Customer details added later to a Rezervacija radnje. */
+export const bookingCustomerSchema = z.object({
+  name: z.string().trim().max(60, "Ime je predugačko").optional().default(""),
+  phone: optionalPhone,
+  vehicleLabel: z.string().trim().max(60, "Predugačko").optional().default(""),
+});
+
 export type BookingRequestInput = z.input<typeof bookingRequestSchema>;
+export type AdminBookingRequestInput = z.input<typeof adminBookingRequestSchema>;
 export type BookingRequest = z.output<typeof bookingRequestSchema>;
 
 /** Field → first error message, for showing under the inputs. */
