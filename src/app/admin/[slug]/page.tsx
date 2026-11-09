@@ -64,7 +64,7 @@ export default async function RequestsPage({ params, searchParams }: Props) {
       priceRsd: b.priceRsd,
       customerNote: b.customerNote,
       customerNoShows: b.customerNoShows,
-      customerUrl: showCustomerLink ? `${base}/kupci/${b.customerId}` : null,
+      customerUrl: showCustomerLink && b.customerId ? `${base}/kupci/${b.customerId}` : null,
     };
   });
 
@@ -76,13 +76,15 @@ export default async function RequestsPage({ params, searchParams }: Props) {
     const start = utcToZoned(b.startsAt, shop.timezone);
     // Booked today for tomorrow: the customer just arranged it, a reminder would be noise.
     const bookedToday = utcToZoned(b.createdAt, shop.timezone).date === today;
-    if (view === "upcoming" && b.status === "confirmed" && start.date === tomorrow && !bookedToday) {
+    // A Rezervacija radnje has no phone to remind.
+    const reminderUrl = customerMessageUrl(b, shop, "reminder", origin);
+    if (view === "upcoming" && b.status === "confirmed" && start.date === tomorrow && !bookedToday && reminderUrl) {
       reminders.push({
         id: b.id,
         time: formatMinutes(start.minutes),
         customerName: b.customerName,
         serviceName: `${b.serviceIcon ?? ""} ${b.serviceName}`.trim(),
-        url: customerMessageUrl(b, shop, "reminder", origin),
+        url: reminderUrl,
         sent: b.reminderSentAt !== null,
       });
     }

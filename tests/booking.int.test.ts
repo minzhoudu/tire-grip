@@ -167,12 +167,12 @@ describe.skipIf(!process.env.DATABASE_URL)("createBookingRequest (Postgres)", ()
     expect(b.booking.customerId).toBe(a.booking.customerId);
     expect(b.booking.vehicleId).toBe(a.booking.vehicleId);
 
-    const [customer] = await db.select().from(customers).where(eq(customers.id, a.booking.customerId));
+    const [customer] = await db.select().from(customers).where(eq(customers.id, a.booking.customerId!));
     expect(customer!.name).toBe("Petar");
     expect(customer!.reminderConsent).toBe(true);
     expect(customer!.reminderConsentAt).not.toBeNull();
 
-    const cars = await db.select().from(vehicles).where(eq(vehicles.customerId, a.booking.customerId));
+    const cars = await db.select().from(vehicles).where(eq(vehicles.customerId, a.booking.customerId!));
     expect(cars).toHaveLength(1);
   });
 

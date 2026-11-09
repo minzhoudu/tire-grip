@@ -19,7 +19,8 @@ export interface PastBookingItem {
   serviceName: string;
   bay: number | null;
   /* shown when the row is opened */
-  customerPhone: string;
+  /** null for a Rezervacija radnje */
+  customerPhone: string | null;
   /** "🚗 Putničko · Golf 7" */
   vehicle: string;
   priceRsd: number;
@@ -221,14 +222,18 @@ function PastBookingDetails({ slug, item: it, onDeleted }: { slug: string; item:
   const supportMode = useSupportMode();
   return (
     <div className="flex flex-col gap-2 border-t border-slate-100 px-3 pt-2.5 pb-3 text-sm">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <a href={`tel:${it.customerPhone}`} className="font-medium text-navy-700">
-          📞 {formatPhone(it.customerPhone)}
-        </a>
-        <a href={whatsappLink(it.customerPhone, `Zdravo ${it.customerName}, `)} target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700">
-          WhatsApp
-        </a>
-      </div>
+      {it.customerPhone ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <a href={`tel:${it.customerPhone}`} className="font-medium text-navy-700">
+            📞 {formatPhone(it.customerPhone)}
+          </a>
+          <a href={whatsappLink(it.customerPhone, `Zdravo ${it.customerName}, `)} target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700">
+            WhatsApp
+          </a>
+        </div>
+      ) : (
+        <p className="text-slate-500">🏠 Upisala radnja, bez broja kupca</p>
+      )}
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 text-slate-600">{it.vehicle}</span>
         <span className="shrink-0 font-mono font-bold tabular-nums text-rust-600">{formatRsd(it.priceRsd)}</span>

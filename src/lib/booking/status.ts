@@ -31,6 +31,9 @@ export const STATUS_LABELS: Record<BookingStatus, string> = {
 
 export const FINAL_STATUSES: BookingStatus[] = ["completed", "cancelled", "rejected", "no_show"];
 
+/** Shown for a booking the shop entered without the customer's data (no phone, no name). */
+export const SHOP_ENTRY_NAME = "Rezervacija radnje";
+
 /** cancelReason set by the self-service cancel link (/otkazi/{id}) — lets the admin UI tell it apart from a shop-initiated cancel. */
 export const CUSTOMER_CANCEL_REASON = "Otkazao kupac";
 

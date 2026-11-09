@@ -10,11 +10,11 @@ import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } f
 import { addDays, dayChipLabel, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
 import { formatMinutes } from "../lib/availability/zoned.ts";
 import { cancellationMessage, confirmationMessage, dayBeforeReminderMessage, rejectionMessage } from "../lib/booking/messages.ts";
-import { ACTIONS, FINAL_STATUSES, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
+import { ACTIONS, FINAL_STATUSES, SHOP_ENTRY_NAME, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
 import { googleMapsUrl } from "../lib/maps-links.ts";
 import { whatsappLink } from "../lib/phone.ts";
 import type { BookingCardData } from "../components/admin/booking-card.tsx";
-import { ADMIN_HORIZON_DAYS } from "./bookings.ts";
+import { ADMIN_HORIZON_DAYS, upsertCustomer } from "./bookings.ts";
 import { shopPublicUrl } from "./origin.ts";
 import { ACTIVE_STATUSES, findOffer, loadBusy, type ShopContext } from "./shops.ts";
 
@@ -33,9 +33,11 @@ export interface AdminBooking {
   vehicleTypeIcon: string | null;
   serviceName: string;
   serviceIcon: string | null;
-  customerId: string;
+  /** null = "Rezervacija radnje" (entered by the shop without the customer's data) */
+  customerId: string | null;
+  /** The customer's name, else the name typed for a Rezervacija radnje, else SHOP_ENTRY_NAME */
   customerName: string;
-  customerPhone: string;
+  customerPhone: string | null;
   vehicleLabel: string | null;
   customerNote: string | null;
   createdAt: Date;
@@ -63,7 +65,7 @@ const bookingColumns = {
   serviceName: services.name,
   serviceIcon: services.icon,
   customerId: bookings.customerId,
-  customerName: customers.name,
+  customerName: sql<string>`coalesce(${customers.name}, ${bookings.guestName}, ${SHOP_ENTRY_NAME})`,
   customerPhone: customers.phone,
   vehicleLabel: vehicles.label,
   customerNote: bookings.customerNote,
@@ -71,6 +73,7 @@ const bookingColumns = {
   cancelReason: bookings.cancelReason,
   notifiedAt: bookings.notifiedAt,
   reminderSentAt: bookings.reminderSentAt,
+  // A Rezervacija radnje has no customer, so no history to count (customer_id is null → 0).
   customerNoShows: sql<number>`(select count(*)::int from bookings ns where ns.shop_id = ${bookings.shopId} and ns.customer_id = ${bookings.customerId} and ns.status = 'no_show')`,
 };
 
@@ -79,7 +82,7 @@ function bookingQuery(db: DB) {
     .select(bookingColumns)
     .from(bookings)
     .innerJoin(services, and(eq(services.id, bookings.serviceId), eq(services.shopId, bookings.shopId)))
-    .innerJoin(customers, and(eq(customers.id, bookings.customerId), eq(customers.shopId, bookings.shopId)))
+    .leftJoin(customers, and(eq(customers.id, bookings.customerId), eq(customers.shopId, bookings.shopId)))
     .innerJoin(vehicleTypes, and(eq(vehicleTypes.id, bookings.vehicleTypeId), eq(vehicleTypes.shopId, bookings.shopId)))
     .leftJoin(parentVehicleTypes, and(eq(parentVehicleTypes.id, vehicleTypes.parentId), eq(parentVehicleTypes.shopId, vehicleTypes.shopId)))
     .leftJoin(vehicles, and(eq(vehicles.id, bookings.vehicleId), eq(vehicles.shopId, bookings.shopId)));
@@ -226,6 +229,45 @@ export async function deleteBookingForSupport(db: DB, shop: { id: string; timezo
   return `${b.customerName} (${b.customerPhone}), ${b.serviceName}, ${start.date} ${formatMinutes(start.minutes)}, status: ${b.status}`;
 }
 
+export type AttachCustomerResult = { ok: true } | { ok: false; reason: "not_found" | "empty" };
+
+/**
+ * Adds the customer's details to a Rezervacija radnje afterwards. With a phone, the booking moves
+ * to that customer (created if new, like a normal booking); with only a name, the name is kept on
+ * the booking. Bookings that already have a customer are left alone.
+ */
+export async function attachCustomerToBooking(
+  db: DB,
+  shopId: string,
+  bookingId: string,
+  input: { name: string; phone: string | null; vehicleLabel: string },
+  now = new Date(),
+): Promise<AttachCustomerResult> {
+  if (!input.phone && !input.name) return { ok: false, reason: "empty" };
+  return db.transaction(async (tx) => {
+    const [booking] = await tx
+      .select({ id: bookings.id, vehicleTypeId: bookings.vehicleTypeId })
+      .from(bookings)
+      .where(and(eq(bookings.shopId, shopId), eq(bookings.id, bookingId), isNull(bookings.customerId)))
+      .for("update");
+    if (!booking) return { ok: false as const, reason: "not_found" as const };
+    if (input.phone) {
+      const { customerId, vehicleId } = await upsertCustomer(tx, shopId, {
+        name: input.name,
+        phone: input.phone,
+        vehicleLabel: input.vehicleLabel,
+        vehicleTypeId: booking.vehicleTypeId,
+        reminderConsent: false,
+        now,
+      });
+      await tx.update(bookings).set({ customerId, vehicleId, guestName: null, updatedAt: now }).where(eq(bookings.id, bookingId));
+    } else {
+      await tx.update(bookings).set({ guestName: input.name, updatedAt: now }).where(eq(bookings.id, bookingId));
+    }
+    return { ok: true as const };
+  });
+}
+
 /** Pending requests waiting for the shop (badge on the tab). */
 export async function countPending(db: DB, shop: { id: string; timezone: string }, now = new Date()): Promise<number> {
   const startOfToday = zonedToUtc(shopToday(shop, now), 0, shop.timezone);
@@ -299,13 +341,17 @@ export function notifyKindForStatus(status: BookingStatus): "confirm" | "reject"
   return NOTIFY_KIND[status] ?? null;
 }
 
-/** wa.me link with the right message for confirm/reject/cancel/day-before reminder — built fresh each time, so it always reflects the booking's current details. */
+/**
+ * wa.me link with the right message for confirm/reject/cancel/day-before reminder — built fresh each time, so it always reflects the booking's current details.
+ * null for a Rezervacija radnje: there's no customer phone to message.
+ */
 export function customerMessageUrl(
   booking: AdminBooking,
   shop: { name: string; slug: string; address: string | null; timezone: string; city?: string | null; latitude?: number | null; longitude?: number | null },
   kind: "confirm" | "reject" | "cancel" | "reminder",
   origin: string,
-): string {
+): string | null {
+  if (!booking.customerPhone) return null;
   const local = utcToZoned(booking.startsAt, shop.timezone);
   const input = {
     shopName: shop.name,
@@ -354,6 +400,7 @@ export function toBookingCardData(
     vehicleLabel: b.vehicleLabel,
     customerName: b.customerName,
     customerPhone: b.customerPhone,
+    isShopEntry: b.customerId === null,
     customerNote: b.customerNote,
     priceRsd: b.priceRsd,
     bay: shop.bays > 1 ? b.bay : null,

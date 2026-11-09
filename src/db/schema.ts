@@ -472,7 +472,13 @@ export const bookings = pgTable(
   {
     id: id(),
     shopId: uuid("shop_id").notNull(),
-    customerId: uuid("customer_id").notNull(),
+    /**
+     * Null = a "Rezervacija radnje": the shop entered it in a hurry without the customer's data
+     * (admin bookings only). guest_name may still hold a name given without a phone.
+     */
+    customerId: uuid("customer_id"),
+    /** Name for a booking without a customer (no phone given), e.g. "Marko". */
+    guestName: text("guest_name"),
     vehicleId: uuid("vehicle_id"),
     serviceId: uuid("service_id").notNull(),
 
@@ -529,6 +535,8 @@ export const bookings = pgTable(
     check("bookings_time_order", sql`${t.startsAt} < ${t.endsAt}`),
     check("bookings_bay_positive", sql`${t.bay} >= 1`),
     check("bookings_price_nonneg", sql`${t.priceRsd} >= 0`),
+    check("bookings_customer_or_admin", sql`${t.customerId} is not null or ${t.source} = 'admin'`),
+    check("bookings_guest_name_without_customer", sql`${t.customerId} is null or ${t.guestName} is null`),
     // + exclusion constraint bookings_no_overlap (custom migration)
   ],
 );

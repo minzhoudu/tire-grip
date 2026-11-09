@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { adminSlotsAction, createManualBookingAction } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
-import { formatRsd } from "@/lib/availability/labels";
+import { dayChipLabel, formatRsd } from "@/lib/availability/labels";
+import { addDays } from "@/lib/availability/zoned";
 import type { PublicService, PublicVehicleType } from "@/server/shops";
 
 type Slots =
@@ -16,6 +17,25 @@ type Slots =
 const input =
   "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20";
 
+const chip = (selected: boolean) =>
+  `rounded-full border px-4 py-2.5 text-sm font-semibold ${selected ? "border-navy-900 bg-navy-900 text-white" : "border-slate-200 bg-slate-100"}`;
+
+/** Day chips shown before "Drugi datum": today and the next few days. */
+const QUICK_DAYS = 7;
+
+const EMPTY_FIELDS = { name: "", phone: "", vehicleLabel: "", note: "" };
+
+/** Last service + vehicle used on this device, so the usual one (e.g. Zamena guma, Putničko) is already picked. */
+function lastChoiceKey(slug: string) {
+  return `manual-booking:${slug}`;
+}
+
+/**
+ * The shop entering a booking itself (a phone call, someone at the door), in as few taps as possible:
+ * service and vehicle are remembered, the day is a chip, then a time and "Upiši termin". The customer's
+ * details are optional, behind "Upiši podatke kupca": without a phone it's saved as a "Rezervacija radnje",
+ * and the details can be added later on the booking's card.
+ */
 export function ManualBookingForm({
   slug,
   base,
@@ -37,20 +57,37 @@ export function ManualBookingForm({
   const service = services.find((s) => s.id === serviceId);
   const [vehicleTypeId, setVehicleTypeId] = useState(service?.prices[0]?.vehicleTypeId ?? "");
   const [date, setDate] = useState(initial.date);
+  const quickDays = Array.from({ length: QUICK_DAYS }, (_, i) => addDays(today, i));
+  const [otherDate, setOtherDate] = useState(!quickDays.includes(initial.date));
   // The tapped time is picked as soon as the slots load (and again after a service change), until a time is chosen by hand.
   const wantedTime = useRef(initial.time);
   const [wantedMissing, setWantedMissing] = useState<string | null>(null);
   const [bay, setBay] = useState(initial.bay);
   const [slots, setSlots] = useState<Slots>({ state: "idle" });
   const [startsAt, setStartsAt] = useState<string | null>(null);
-  const [fields, setFields] = useState({ name: "", phone: "", vehicleLabel: "", note: "" });
+  const [showDetails, setShowDetails] = useState(false);
+  const [fields, setFields] = useState(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [done, setDone] = useState<{ summary: string; messageUrl: string } | null>(null);
+  const [done, setDone] = useState<{ summary: string; messageUrl: string | null } | null>(null);
   const [pending, startTransition] = useTransition();
   const [reload, setReload] = useState(0);
 
   const price = service?.prices.find((p) => p.vehicleTypeId === vehicleTypeId);
   const vehicleTypeById = new Map(vehicleTypes.map((vt) => [vt.id, vt]));
+
+  // Start from the service + vehicle used last time on this device.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(lastChoiceKey(slug)) ?? "null") as { serviceId?: string; vehicleTypeId?: string } | null;
+      const s = services.find((x) => x.id === saved?.serviceId);
+      if (!s) return;
+      setServiceId(s.id);
+      if (s.prices.some((p) => p.vehicleTypeId === saved?.vehicleTypeId)) setVehicleTypeId(saved!.vehicleTypeId!);
+    } catch {
+      // No storage (private mode): the first service is fine.
+    }
+    // Only on first render: later changes are the user's own picks.
+  }, []);
 
   // Keep the vehicle type valid for the chosen service.
   useEffect(() => {
@@ -84,25 +121,38 @@ export function ManualBookingForm({
     return <p className="rounded-2xl border-2 border-navy-900 bg-white p-5">Radnja nema nijednu uslugu koja se zakazuje.</p>;
   }
 
+  function pickDate(d: string) {
+    wantedTime.current = null;
+    setWantedMissing(null);
+    setDate(d);
+  }
+
   if (done) {
     return (
       <div className="rounded-2xl border-2 border-navy-900 bg-white p-5">
         <p className="text-lg font-bold">✅ Termin je upisan</p>
         <p className="mt-1 text-slate-700">{done.summary}</p>
-        <a
-          href={done.messageUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 block rounded-xl border-2 border-navy-900 bg-[#25d366] px-4 py-3 text-center font-mono font-bold text-white"
-        >
-          📲 POŠALJI POTVRDU KUPCU NA WHATSAPP
-        </a>
+        {done.messageUrl ? (
+          <a
+            href={done.messageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 block rounded-xl border-2 border-navy-900 bg-[#25d366] px-4 py-3 text-center font-mono font-bold text-white"
+          >
+            📲 POŠALJI POTVRDU KUPCU NA WHATSAPP
+          </a>
+        ) : (
+          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Upisano bez broja kupca. Podatke možete dopisati kasnije na kartici termina („Upiši podatke kupca“).
+          </p>
+        )}
         <div className="mt-3 flex gap-2">
           <button
             type="button"
             onClick={() => {
               setDone(null);
-              setFields({ name: "", phone: "", vehicleLabel: "", note: "" });
+              setFields(EMPTY_FIELDS);
+              setShowDetails(false);
               wantedTime.current = null;
               setWantedMissing(null);
               setReload((k) => k + 1);
@@ -122,7 +172,7 @@ export function ManualBookingForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!startsAt) {
-      setErrors({ startsAt: "Izaberite termin." });
+      setErrors({ startsAt: "Izaberite vreme." });
       return;
     }
     startTransition(async () => {
@@ -130,8 +180,14 @@ export function ManualBookingForm({
       if (r.ok) {
         setErrors({});
         setDone({ summary: r.summary, messageUrl: r.messageUrl });
+        try {
+          localStorage.setItem(lastChoiceKey(slug), JSON.stringify({ serviceId, vehicleTypeId }));
+        } catch {
+          // Not remembered this time; nothing else depends on it.
+        }
       } else if (r.reason === "invalid") {
         setErrors(r.errors);
+        setShowDetails(true); // the only fields that can be invalid are in there
       } else if (r.reason === "slot_unavailable") {
         setReload((k) => k + 1); // reload slots for the same day
         setErrors({ startsAt: "Termin je upravo zauzet. Izaberite drugi." });
@@ -143,48 +199,67 @@ export function ManualBookingForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl border-2 border-navy-900 bg-white p-4" noValidate>
-      <label className="block">
-        <span className="text-sm font-semibold text-slate-700">Usluga</span>
-        <select className={`${input} mt-1.5`} value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.icon} {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {services.length > 1 && (
+        <fieldset>
+          <legend className="text-sm font-semibold text-slate-700">Usluga</legend>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {services.map((s) => (
+              <button key={s.id} type="button" onClick={() => setServiceId(s.id)} aria-pressed={serviceId === s.id} className={chip(serviceId === s.id)}>
+                {s.icon} {s.name}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {(service?.prices.length ?? 0) > 1 && (
+        <fieldset>
+          <legend className="text-sm font-semibold text-slate-700">Vozilo</legend>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {service?.prices.map((p) => (
+              <button
+                key={p.vehicleTypeId}
+                type="button"
+                onClick={() => setVehicleTypeId(p.vehicleTypeId)}
+                aria-pressed={vehicleTypeId === p.vehicleTypeId}
+                className={chip(vehicleTypeId === p.vehicleTypeId)}
+              >
+                {vehicleTypeById.get(p.vehicleTypeId)?.icon} {vehicleTypeById.get(p.vehicleTypeId)?.label} · {formatRsd(p.priceRsd)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <fieldset>
-        <legend className="text-sm font-semibold text-slate-700">Vozilo</legend>
+        <legend className="text-sm font-semibold text-slate-700">Dan</legend>
         <div className="mt-1.5 flex flex-wrap gap-2">
-          {service?.prices.map((p) => (
+          {quickDays.map((d) => (
             <button
-              key={p.vehicleTypeId}
+              key={d}
               type="button"
-              onClick={() => setVehicleTypeId(p.vehicleTypeId)}
-              aria-pressed={vehicleTypeId === p.vehicleTypeId}
-              className={`rounded-full border px-4 py-2.5 text-sm font-semibold ${
-                vehicleTypeId === p.vehicleTypeId ? "border-navy-900 bg-navy-900 text-white" : "border-slate-200 bg-slate-100"
-              }`}
+              onClick={() => {
+                setOtherDate(false);
+                pickDate(d);
+              }}
+              aria-pressed={!otherDate && date === d}
+              className={chip(!otherDate && date === d)}
             >
-              {vehicleTypeById.get(p.vehicleTypeId)?.icon} {vehicleTypeById.get(p.vehicleTypeId)?.label} · {formatRsd(p.priceRsd)}
+              {dayChipLabel(d, today)}
             </button>
           ))}
+          <button type="button" onClick={() => setOtherDate(true)} aria-pressed={otherDate} className={chip(otherDate)}>
+            📅 Drugi datum
+          </button>
         </div>
+        {otherDate && (
+          <input type="date" aria-label="Datum" className={`${input} mt-2`} min={today} value={date} onChange={(e) => pickDate(e.target.value)} />
+        )}
       </fieldset>
-
-      <label className="block">
-        <span className="text-sm font-semibold text-slate-700">Datum</span>
-        <input type="date" className={`${input} mt-1.5`} min={today} value={date} onChange={(e) => {
-            wantedTime.current = null;
-            setWantedMissing(null);
-            setDate(e.target.value);
-          }} />
-      </label>
 
       <div>
         <p className="text-sm font-semibold text-slate-700">
-          Termin{price && <span className="font-normal text-slate-500"> · traje oko {price.durationMin ?? service?.durationMin} min</span>}
+          Vreme{price && <span className="font-normal text-slate-500"> · traje oko {price.durationMin ?? service?.durationMin} min</span>}
         </p>
         {bay !== null && (
           <p className="mt-1.5 flex items-center gap-2 text-sm text-slate-600">
@@ -237,32 +312,43 @@ export function ManualBookingForm({
         {errors.startsAt && <p className="mt-1 text-sm text-red-700">{errors.startsAt}</p>}
       </div>
 
-      {(
-        [
-          ["name", "Ime kupca", "text", "given-name"],
-          ["phone", "Telefon", "tel", "tel"],
-          ["vehicleLabel", "Auto (marka i model)", "text", "off"],
-          ["note", "Napomena", "text", "off"],
-        ] as const
-      ).map(([key, label, type, autoComplete]) => (
-        <label key={key} className="block">
-          <span className="text-sm font-semibold text-slate-700">
-            {label}
-            {(key === "name" || key === "phone") && <span className="text-red-600"> *</span>}
-          </span>
-          <input
-            type={type}
-            autoComplete={autoComplete}
-            className={`${input} mt-1.5 ${errors[key] ? "border-red-400" : ""}`}
-            value={fields[key]}
-            onChange={(e) => {
-              setFields((f) => ({ ...f, [key]: e.target.value }));
-              setErrors((er) => ({ ...er, [key]: "" }));
-            }}
-          />
-          {errors[key] && <span className="mt-1 block text-sm text-red-700">{errors[key]}</span>}
-        </label>
-      ))}
+      {showDetails ? (
+        <fieldset className="flex flex-col gap-3 rounded-xl bg-slate-50 p-3">
+          <legend className="sr-only">Podaci kupca</legend>
+          <p className="text-sm text-slate-600">Sve je opciono. Sa brojem telefona kupac dobija WhatsApp potvrdu i podsetnike.</p>
+          {(
+            [
+              ["name", "Ime kupca", "text", "given-name"],
+              ["phone", "Telefon", "tel", "tel"],
+              ["vehicleLabel", "Auto (marka i model)", "text", "off"],
+              ["note", "Napomena", "text", "off"],
+            ] as const
+          ).map(([key, label, type, autoComplete]) => (
+            <label key={key} className="block">
+              <span className="text-sm font-semibold text-slate-700">{label}</span>
+              <input
+                type={type}
+                autoComplete={autoComplete}
+                className={`${input} mt-1.5 ${errors[key] ? "border-red-400" : ""}`}
+                value={fields[key]}
+                onChange={(e) => {
+                  setFields((f) => ({ ...f, [key]: e.target.value }));
+                  setErrors((er) => ({ ...er, [key]: "" }));
+                }}
+              />
+              {errors[key] && <span className="mt-1 block text-sm text-red-700">{errors[key]}</span>}
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowDetails(true)}
+          className="rounded-xl border-2 border-dashed border-slate-300 px-4 py-3 text-left text-sm font-semibold text-navy-700"
+        >
+          ✍️ Upiši podatke kupca <span className="font-normal text-slate-500">(opciono, bez toga se upisuje kao rezervacija radnje)</span>
+        </button>
+      )}
 
       <button
         type="submit"

@@ -40,6 +40,7 @@ Ne koristi `drizzle-kit push`: na bazi sa podacima pokušava da obriše i ponovo
 | `blocked_times` | ručno blokirano vreme (jedna ili sve dizalice) |
 | `customers`, `vehicles` | klijenti radnje (telefon u E.164, jedinstven po radnji), saglasnost za podsetnike, vozila |
 | `bookings` | rezervacije: snapshot cene/trajanja, dizalica, status, izvor |
+| | termin koji radnja upiše bez broja kupca je „Rezervacija radnje“: `customer_id` je prazan (samo za `source = admin`), opciono ime u `guest_name`; podaci se mogu dopisati kasnije sa kartice termina |
 | `tire_storage` | hotel za gume |
 | `reminder_campaigns`, `reminder_messages` | sezonski podsetnici sa personalizovanim linkom (`/r/{token}`) |
 

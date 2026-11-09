@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { changeStatusAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
 import { InlineSpinner } from "@/components/ui/busy";
 import { sendReminder, useSentReminders } from "./reminder-store";
+import { AddCustomerDetails } from "./add-customer-details";
 import { SupportDeleteButton } from "./support-delete-button";
 import { useSupportMode } from "./support-mode";
 import { useToast } from "@/components/ui/toast";
@@ -22,7 +23,9 @@ export interface BookingCardData {
   vehicleTypeIcon: string | null;
   vehicleLabel: string | null;
   customerName: string;
-  customerPhone: string;
+  /** null for a Rezervacija radnje (entered by the shop without the customer's data) */
+  customerPhone: string | null;
+  isShopEntry: boolean;
   customerNote: string | null;
   priceRsd: number;
   /** Shown only when the shop has more than one bay */
@@ -105,7 +108,7 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
     void markNotifiedAction({ slug, bookingId: b.id });
   }
 
-  const chatUrl = whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `);
+  const chatUrl = b.customerPhone ? whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `) : null;
   const cancelledByCustomer = status === "cancelled" && b.cancelReason === CUSTOMER_CANCEL_REASON;
 
   if (deleted) {
@@ -136,9 +139,17 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
         <p className="font-semibold">
           {b.customerName}
           {b.vehicleLabel && <span className="font-normal text-slate-600"> · {b.vehicleLabel}</span>}
-          {b.byPhone && <span className="ml-1 text-xs font-normal text-slate-500">(upisano telefonom)</span>}
+          {b.isShopEntry ? (
+            <span className="ml-1 text-xs font-normal text-slate-500">(upisala radnja, bez broja)</span>
+          ) : (
+            b.byPhone && <span className="ml-1 text-xs font-normal text-slate-500">(upisano telefonom)</span>
+          )}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          {!b.customerPhone || !chatUrl ? (
+            <AddCustomerDetails slug={slug} bookingId={b.id} />
+          ) : (
+          <>
           <a href={`tel:${b.customerPhone}`} className="font-medium text-navy-700 underline-offset-2 hover:underline">
             📞 {formatPhone(b.customerPhone)}
           </a>
@@ -159,6 +170,8 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
               </a>
               {b.reminder && status === "confirmed" && <span className="text-xs font-semibold text-emerald-700">Podsetnik poslat ✓</span>}
             </>
+          )}
+          </>
           )}
           <span className="ml-auto font-mono font-bold tabular-nums text-rust-600">{formatRsd(b.priceRsd)}</span>
         </div>

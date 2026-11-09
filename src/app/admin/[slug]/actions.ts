@@ -10,10 +10,18 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { dayLongLabel } from "@/lib/availability";
 import { parseTime } from "@/lib/availability/zoned";
-import { bookingRequestSchema, fieldErrors, type BookingRequestInput } from "@/lib/booking/request";
+import {
+  adminBookingRequestSchema,
+  bookingCustomerSchema,
+  bookingRequestSchema,
+  fieldErrors,
+  type AdminBookingRequestInput,
+  type BookingRequestInput,
+} from "@/lib/booking/request";
 import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "@/lib/booking/status";
 import {
   adminDaySlots,
+  attachCustomerToBooking,
   changeBookingStatus,
   deleteBookingForSupport,
   completeBookings,
@@ -145,12 +153,14 @@ export async function adminSlotsAction(
 }
 
 export type ManualBookingResult =
-  | { ok: true; messageUrl: string; summary: string }
+  /** messageUrl is null for a Rezervacija radnje (no phone to send the confirmation to) */
+  | { ok: true; messageUrl: string | null; summary: string }
   | { ok: false; reason: "invalid"; errors: Record<string, string> }
   | { ok: false; reason: "slot_unavailable" | "service_unavailable" | "shop_not_found" };
 
-export async function createManualBookingAction(raw: BookingRequestInput & { bay?: number }): Promise<ManualBookingResult> {
-  const parsed = bookingRequestSchema.safeParse(raw);
+/** Nothing about the customer is required: with no phone it's a "Rezervacija radnje", details can be added later. */
+export async function createManualBookingAction(raw: AdminBookingRequestInput & { bay?: number }): Promise<ManualBookingResult> {
+  const parsed = adminBookingRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
   const { shop } = await requireShopAccess(parsed.data.slug);
   const preferredBay = Number.isInteger(raw.bay) && raw.bay! >= 1 && raw.bay! <= shop.bays ? raw.bay : undefined;
@@ -166,6 +176,19 @@ export async function createManualBookingAction(raw: BookingRequestInput & { bay
     messageUrl: customerMessageUrl(booking, shop, "confirm", await getOrigin()),
     summary: `${booking.customerName} · ${dayLongLabel(result.booking.date)} u ${result.booking.time}h${shop.bays > 1 ? ` · boks ${result.booking.bay}` : ""}`,
   };
+}
+
+const attachCustomerInput = bookingCustomerSchema.extend({ slug: slugSchema, bookingId: z.uuid() });
+
+export type AttachCustomerActionResult = { ok: true } | { ok: false; reason: "invalid"; errors: Record<string, string> } | { ok: false; reason: "not_found" | "empty" };
+
+/** Adds the customer's name/phone/car to a Rezervacija radnje afterwards. */
+export async function attachBookingCustomerAction(raw: z.input<typeof attachCustomerInput>): Promise<AttachCustomerActionResult> {
+  const parsed = attachCustomerInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
+  const { shop } = await requireShopAccess(parsed.data.slug);
+  const { bookingId, name, phone, vehicleLabel } = parsed.data;
+  return attachCustomerToBooking(getDb(), shop.id, bookingId, { name, phone, vehicleLabel });
 }
 
 /* ------------------------------------------------------------------ blocked time */
