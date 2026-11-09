@@ -7,7 +7,7 @@ import { and, asc, desc, eq, gte, gt, inArray, isNull, lt, lte, not, or, sql } f
 import { alias } from "drizzle-orm/pg-core";
 import type { DB } from "../db/index.ts";
 import { blockedTimes, bookings, customers, services, vehicleTypes, vehicles } from "../db/schema.ts";
-import { addDays, dayChipLabel, dayLongLabel, getDayAvailability, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
+import { addDays, dayChipLabel, dayLongLabel, getDayAvailability, listBookableDays, shopToday, utcToZoned, zonedToUtc } from "../lib/availability/index.ts";
 import { formatMinutes } from "../lib/availability/zoned.ts";
 import { cancellationMessage, confirmationMessage, dayBeforeReminderMessage, rejectionMessage } from "../lib/booking/messages.ts";
 import { ACTIONS, FINAL_STATUSES, SHOP_ENTRY_NAME, allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "../lib/booking/status.ts";
@@ -462,13 +462,48 @@ export async function markReminderSent(db: DB, shopId: string, bookingId: string
 /* ------------------------------------------------------------ manual booking slots */
 
 /** Slots for the shop's own entry form: no minimum notice, long horizon. */
+/** The shop entering its own bookings: no minimum notice, and further ahead than customers can book. */
+function adminSettings(ctx: ShopContext) {
+  return { ...ctx.settings, minNoticeMin: 0, bookingHorizonDays: Math.max(ctx.settings.bookingHorizonDays, ADMIN_HORIZON_DAYS) };
+}
+
+/**
+ * The earliest free start for a service + vehicle from right now, by the same rules as the shop's
+ * own day view (no minimum notice, the longer admin horizon): for "Zakaži prvi slobodan termin".
+ */
+export async function adminFirstFreeSlot(
+  db: DB,
+  ctx: ShopContext,
+  serviceId: string,
+  vehicleTypeId: string,
+  now = new Date(),
+): Promise<{ date: string; time: string; startsAt: Date } | null> {
+  const found = findOffer(ctx, serviceId, vehicleTypeId);
+  if (!found) return null;
+  const settings = adminSettings(ctx);
+  const tz = settings.timezone;
+  const today = shopToday(settings, now);
+  const busy = await loadBusy(db, ctx.shop.id, zonedToUtc(today, 0, tz), zonedToUtc(addDays(today, settings.bookingHorizonDays + 1), 0, tz));
+  const [day] = listBookableDays({
+    shop: settings,
+    weeklyHours: ctx.weeklyHours,
+    exceptions: ctx.exceptions,
+    busy,
+    durationMin: found.offer.durationMin,
+    now,
+    limit: 1,
+  });
+  const slot = day?.slots.find((s) => s.available);
+  return day && slot ? { date: day.date, time: slot.time, startsAt: slot.startsAt } : null;
+}
+
 export async function adminDaySlots(db: DB, ctx: ShopContext, serviceId: string, vehicleTypeId: string, date: string, now = new Date()) {
   const found = findOffer(ctx, serviceId, vehicleTypeId);
   if (!found) return null;
   const tz = ctx.settings.timezone;
   const busy = await loadBusy(db, ctx.shop.id, zonedToUtc(date, 0, tz), zonedToUtc(addDays(date, 1), 0, tz));
   const day = getDayAvailability({
-    shop: { ...ctx.settings, minNoticeMin: 0, bookingHorizonDays: Math.max(ctx.settings.bookingHorizonDays, ADMIN_HORIZON_DAYS) },
+    shop: adminSettings(ctx),
     weeklyHours: ctx.weeklyHours,
     exceptions: ctx.exceptions,
     busy,

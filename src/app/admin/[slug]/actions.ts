@@ -21,6 +21,7 @@ import {
 import { allowedActions, notifiesCustomer, type BookingAction, type BookingStatus } from "@/lib/booking/status";
 import {
   adminDaySlots,
+  adminFirstFreeSlot,
   attachCustomerToBooking,
   changeBookingStatus,
   deleteBookingForSupport,
@@ -150,6 +151,22 @@ export async function adminSlotsAction(
     status: day.status,
     slots: day.slots.map((s) => ({ time: s.time, startsAt: s.startsAt.toISOString(), available: s.available })),
   };
+}
+
+const firstFreeInput = z.object({ slug: slugSchema, serviceId: z.uuid(), vehicleTypeId: z.uuid() });
+
+/** The earliest free time from now for this service + vehicle, shown on "Zakaži prvi slobodan termin" before it's tapped. */
+export async function firstFreeSlotAction(
+  raw: z.input<typeof firstFreeInput>,
+): Promise<{ ok: true; slot: { date: string; time: string; startsAt: string } | null } | { ok: false }> {
+  const input = firstFreeInput.safeParse(raw);
+  if (!input.success) return { ok: false };
+  await requireShopAccess(input.data.slug);
+  const db = getDb();
+  const ctx = await loadShopContext(db, input.data.slug);
+  if (!ctx) return { ok: false };
+  const slot = await adminFirstFreeSlot(db, ctx, input.data.serviceId, input.data.vehicleTypeId);
+  return { ok: true, slot: slot ? { date: slot.date, time: slot.time, startsAt: slot.startsAt.toISOString() } : null };
 }
 
 export type ManualBookingResult =

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { adminSlotsAction, createManualBookingAction } from "@/app/admin/[slug]/actions";
+import { adminSlotsAction, createManualBookingAction, firstFreeSlotAction } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
 import { dayChipLabel, formatRsd } from "@/lib/availability/labels";
 import { addDays } from "@/lib/availability/zoned";
@@ -24,6 +24,8 @@ const chip = (selected: boolean) =>
 const QUICK_DAYS = 7;
 
 const EMPTY_FIELDS = { name: "", phone: "", vehicleLabel: "", note: "" };
+
+type FirstFree = { state: "loading" } | { state: "error" } | { state: "ready"; slot: { date: string; time: string; startsAt: string } | null };
 
 /** Last service + vehicle used on this device, so the usual one (e.g. Zamena guma, Putničko) is already picked. */
 function lastChoiceKey(slug: string) {
@@ -71,6 +73,7 @@ export function ManualBookingForm({
   const [done, setDone] = useState<{ summary: string; messageUrl: string | null } | null>(null);
   const [pending, startTransition] = useTransition();
   const [reload, setReload] = useState(0);
+  const [firstFree, setFirstFree] = useState<FirstFree>({ state: "loading" });
 
   const price = service?.prices.find((p) => p.vehicleTypeId === vehicleTypeId);
   const vehicleTypeById = new Map(vehicleTypes.map((vt) => [vt.id, vt]));
@@ -116,6 +119,19 @@ export function ManualBookingForm({
       cancelled = true;
     };
   }, [slug, serviceId, vehicleTypeId, date, reload]);
+
+  // The earliest free time from now, shown on the "Zakaži prvi slobodan termin" button before it's tapped.
+  useEffect(() => {
+    if (!serviceId || !vehicleTypeId) return;
+    let cancelled = false;
+    setFirstFree({ state: "loading" });
+    firstFreeSlotAction({ slug, serviceId, vehicleTypeId })
+      .then((r) => !cancelled && setFirstFree(r.ok ? { state: "ready", slot: r.slot } : { state: "error" }))
+      .catch(() => !cancelled && setFirstFree({ state: "error" }));
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, serviceId, vehicleTypeId, reload]);
 
   if (services.length === 0) {
     return <p className="rounded-2xl border-2 border-navy-900 bg-white p-5">Radnja nema nijednu uslugu koja se zakazuje.</p>;
@@ -175,8 +191,18 @@ export function ManualBookingForm({
       setErrors({ startsAt: "Izaberite vreme." });
       return;
     }
+    book(startsAt, bay, false);
+  }
+
+  /** One tap: the earliest free time from now (shown on the button), any bay. */
+  function bookFirstFree() {
+    if (firstFree.state !== "ready" || !firstFree.slot) return;
+    book(firstFree.slot.startsAt, null, true);
+  }
+
+  function book(at: string, preferredBay: number | null, firstFreeTap: boolean) {
     startTransition(async () => {
-      const r = await createManualBookingAction({ slug, serviceId, vehicleTypeId, startsAt, ...fields, reminderConsent: false, bay: bay ?? undefined });
+      const r = await createManualBookingAction({ slug, serviceId, vehicleTypeId, startsAt: at, ...fields, reminderConsent: false, bay: preferredBay ?? undefined });
       if (r.ok) {
         setErrors({});
         setDone({ summary: r.summary, messageUrl: r.messageUrl });
@@ -189,8 +215,9 @@ export function ManualBookingForm({
         setErrors(r.errors);
         setShowDetails(true); // the only fields that can be invalid are in there
       } else if (r.reason === "slot_unavailable") {
-        setReload((k) => k + 1); // reload slots for the same day
-        setErrors({ startsAt: "Termin je upravo zauzet. Izaberite drugi." });
+        setReload((k) => k + 1); // reload slots for the same day, and the first free time
+        if (firstFreeTap) toast("Taj termin je upravo zauzet. Na dugmetu je sada sledeći slobodan.", "error");
+        else setErrors({ startsAt: "Termin je upravo zauzet. Izaberite drugi." });
       } else {
         toast("Usluga trenutno nije dostupna.", "error");
       }
@@ -230,6 +257,33 @@ export function ManualBookingForm({
           </div>
         </fieldset>
       )}
+
+      <div className="rounded-xl border-2 border-accent-500 bg-amber-50 p-3">
+        <button
+          type="button"
+          onClick={bookFirstFree}
+          disabled={pending || firstFree.state !== "ready" || !firstFree.slot}
+          className="w-full rounded-xl border-2 border-navy-900 bg-navy-900 px-4 py-3 font-bold text-white active:scale-[0.98] disabled:opacity-60"
+        >
+          ⚡ Zakaži prvi slobodan termin
+          {firstFree.state === "ready" && firstFree.slot && (
+            <span className="block text-sm font-semibold text-accent-500">
+              {dayChipLabel(firstFree.slot.date, today)} u {firstFree.slot.time}h
+            </span>
+          )}
+        </button>
+        <p className="mt-2 text-xs text-slate-600">
+          {firstFree.state === "loading"
+            ? "Tražim prvi slobodan termin…"
+            : firstFree.state === "error"
+              ? "Nije uspelo traženje slobodnog termina. Izaberite dan i vreme ispod."
+              : !firstFree.slot
+                ? "Nema slobodnog termina za ovu uslugu u narednih 120 dana."
+                : `Jednim dodirom upisuje „${service?.name}“ (${vehicleTypeById.get(vehicleTypeId)?.label ?? "vozilo"}) u najraniji slobodan termin od ovog trenutka, prikazan iznad, bez biranja dana i vremena. Ako ste upisali podatke kupca ispod, čuvaju se uz termin.`}
+        </p>
+      </div>
+
+      <p className="-my-1 text-center text-xs font-semibold tracking-wide text-slate-400 uppercase">ili izaberite dan i vreme</p>
 
       <fieldset>
         <legend className="text-sm font-semibold text-slate-700">Dan</legend>

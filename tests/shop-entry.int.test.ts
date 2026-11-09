@@ -10,9 +10,10 @@ import { bookings, customers, servicePrices, services, shops, vehicleTypes, vehi
 import { addDays, shopToday, zonedToUtc } from "../src/lib/availability/index.ts";
 import { adminBookingRequestSchema, bookingRequestSchema } from "../src/lib/booking/request.ts";
 import { SHOP_ENTRY_NAME } from "../src/lib/booking/status.ts";
-import { attachCustomerToBooking, customerMessageUrl, getBooking, toBookingCardData } from "../src/server/admin.ts";
+import { adminFirstFreeSlot, attachCustomerToBooking, customerMessageUrl, getBooking, toBookingCardData } from "../src/server/admin.ts";
 import { createBookingRequest } from "../src/server/bookings.ts";
 import { searchShopCustomers } from "../src/server/customers.ts";
+import { loadShopContext } from "../src/server/shops.ts";
 
 if (process.env.CI && !process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests in CI");
 
@@ -125,6 +126,25 @@ describe.skipIf(!process.env.DATABASE_URL)("Rezervacija radnje (Postgres)", () =
 
     // once it has a customer it's an ordinary booking: no more "add details"
     expect(await attachCustomerToBooking(db, shopId, id, { name: "X", phone: null, vehicleLabel: "" })).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("finds the first free time from now, skipping times where every bay is taken", async () => {
+    const db = getDb();
+    const ctx = (await loadShopContext(db, slug))!;
+    const now = zonedToUtc(date, 7 * 60, TZ); // 07:00 that day, before opening
+    const first = await adminFirstFreeSlot(db, ctx, serviceId, carId, now);
+    expect(first).toMatchObject({ date, time: "08:00" });
+
+    // fill all 3 bays at 08:00 → the next free start is 08:30
+    for (let i = 0; i < 3; i++) {
+      const r = await createBookingRequest(db, entry(8), { source: "admin", now });
+      expect(r.ok).toBe(true);
+    }
+    expect(await adminFirstFreeSlot(db, ctx, serviceId, carId, now)).toMatchObject({ date, time: "08:30" });
+
+    // after closing time it moves to the next day's opening
+    const evening = zonedToUtc(date, 18 * 60, TZ);
+    expect(await adminFirstFreeSlot(db, ctx, serviceId, carId, evening)).toMatchObject({ date: addDays(date, 1), time: "08:00" });
   });
 
   it("Kupci lists only real customers", async () => {
