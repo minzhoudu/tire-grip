@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { changeStatusAction, markNotifiedAction } from "@/app/admin/[slug]/actions";
+import { changeStatusAction, markNotifiedAction, type BookingCustomerView } from "@/app/admin/[slug]/actions";
 import { InlineSpinner } from "@/components/ui/busy";
 import { sendReminder, useSentReminders } from "./reminder-store";
 import { AddCustomerDetails } from "./add-customer-details";
@@ -78,6 +78,14 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
   const [notifyUrl, setNotifyUrl] = useState(b.notifyUrl);
   const sentHere = useSentReminders();
   const supportMode = useSupportMode();
+  // Details added with "Upiši podatke kupca" show right away, without waiting for the list to reload.
+  const [savedCustomer, setSavedCustomer] = useState<BookingCustomerView | null>(null);
+  const customer: BookingCustomerView = savedCustomer ?? {
+    customerName: b.customerName,
+    customerPhone: b.customerPhone,
+    vehicleLabel: b.vehicleLabel,
+    isShopEntry: b.isShopEntry,
+  };
   const [deleted, setDeleted] = useState(false);
   const reminderDue = b.reminder && status === "confirmed" && !sentHere(b.id, b.reminder.sent);
 
@@ -108,7 +116,7 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
     void markNotifiedAction({ slug, bookingId: b.id });
   }
 
-  const chatUrl = b.customerPhone ? whatsappLink(b.customerPhone, `Zdravo ${b.customerName}, `) : null;
+  const chatUrl = customer.customerPhone ? whatsappLink(customer.customerPhone, `Zdravo ${customer.customerName}, `) : null;
   const cancelledByCustomer = status === "cancelled" && b.cancelReason === CUSTOMER_CANCEL_REASON;
 
   if (deleted) {
@@ -137,21 +145,21 @@ export function BookingCard({ slug, booking: b }: { slug: string; booking: Booki
 
       <div className="mt-3 border-t border-slate-100 pt-3">
         <p className="font-semibold">
-          {b.customerName}
-          {b.vehicleLabel && <span className="font-normal text-slate-600"> · {b.vehicleLabel}</span>}
-          {b.isShopEntry ? (
+          {customer.customerName}
+          {customer.vehicleLabel && <span className="font-normal text-slate-600"> · {customer.vehicleLabel}</span>}
+          {customer.isShopEntry ? (
             <span className="ml-1 text-xs font-normal text-slate-500">(upisala radnja, bez broja)</span>
           ) : (
             b.byPhone && <span className="ml-1 text-xs font-normal text-slate-500">(upisano telefonom)</span>
           )}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          {!b.customerPhone || !chatUrl ? (
-            <AddCustomerDetails slug={slug} bookingId={b.id} />
+          {!customer.customerPhone || !chatUrl ? (
+            <AddCustomerDetails slug={slug} bookingId={b.id} onSaved={setSavedCustomer} />
           ) : (
           <>
-          <a href={`tel:${b.customerPhone}`} className="font-medium text-navy-700 underline-offset-2 hover:underline">
-            📞 {formatPhone(b.customerPhone)}
+          <a href={`tel:${customer.customerPhone}`} className="font-medium text-navy-700 underline-offset-2 hover:underline">
+            📞 {formatPhone(customer.customerPhone)}
           </a>
           {reminderDue ? (
             <a

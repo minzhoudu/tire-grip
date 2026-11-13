@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { attachBookingCustomerAction } from "@/app/admin/[slug]/actions";
+import { attachBookingCustomerAction, type BookingCustomerView } from "@/app/admin/[slug]/actions";
 import { useToast } from "@/components/ui/toast";
 
 const input =
@@ -12,7 +12,16 @@ const input =
  * On a Rezervacija radnje: adds the customer's details afterwards. A phone moves the booking to
  * that customer (WhatsApp confirmation and reminders work from then on); a name alone is just shown.
  */
-export function AddCustomerDetails({ slug, bookingId }: { slug: string; bookingId: string }) {
+export function AddCustomerDetails({
+  slug,
+  bookingId,
+  onSaved,
+}: {
+  slug: string;
+  bookingId: string;
+  /** The saved details, so the card shows them at once — also in lists a refresh doesn't reload (Istorija). */
+  onSaved: (customer: BookingCustomerView) => void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -42,6 +51,7 @@ export function AddCustomerDetails({ slug, bookingId }: { slug: string; bookingI
       }
       toast("Podaci kupca su sačuvani.");
       setOpen(false);
+      onSaved(r.customer);
       router.refresh();
     });
   }

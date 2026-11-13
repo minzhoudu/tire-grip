@@ -197,7 +197,18 @@ export async function createManualBookingAction(raw: AdminBookingRequestInput & 
 
 const attachCustomerInput = bookingCustomerSchema.extend({ slug: slugSchema, bookingId: z.uuid() });
 
-export type AttachCustomerActionResult = { ok: true } | { ok: false; reason: "invalid"; errors: Record<string, string> } | { ok: false; reason: "not_found" | "empty" };
+/** What the booking's card shows about the customer, sent back so the card updates in place (e.g. in Istorija, whose list a refresh doesn't reload). */
+export interface BookingCustomerView {
+  customerName: string;
+  customerPhone: string | null;
+  vehicleLabel: string | null;
+  isShopEntry: boolean;
+}
+
+export type AttachCustomerActionResult =
+  | { ok: true; customer: BookingCustomerView }
+  | { ok: false; reason: "invalid"; errors: Record<string, string> }
+  | { ok: false; reason: "not_found" | "empty" };
 
 /** Adds the customer's name/phone/car to a Rezervacija radnje afterwards. */
 export async function attachBookingCustomerAction(raw: z.input<typeof attachCustomerInput>): Promise<AttachCustomerActionResult> {
@@ -205,7 +216,15 @@ export async function attachBookingCustomerAction(raw: z.input<typeof attachCust
   if (!parsed.success) return { ok: false, reason: "invalid", errors: fieldErrors(parsed.error) };
   const { shop } = await requireShopAccess(parsed.data.slug);
   const { bookingId, name, phone, vehicleLabel } = parsed.data;
-  return attachCustomerToBooking(getDb(), shop.id, bookingId, { name, phone, vehicleLabel });
+  const db = getDb();
+  const r = await attachCustomerToBooking(db, shop.id, bookingId, { name, phone, vehicleLabel });
+  if (!r.ok) return r;
+  const b = await getBooking(db, shop.id, bookingId);
+  if (!b) return { ok: false, reason: "not_found" };
+  return {
+    ok: true,
+    customer: { customerName: b.customerName, customerPhone: b.customerPhone, vehicleLabel: b.vehicleLabel, isShopEntry: b.customerId === null },
+  };
 }
 
 /* ------------------------------------------------------------------ blocked time */
